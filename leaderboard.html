@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leaderboard - CADTML Cup 2026</title>
+  <link rel="stylesheet" href="shared/style.css">
+  <style>
+    .my-rank-row {
+      background: rgba(255, 200, 0, 0.08) !important;
+      border-top: 2px solid var(--yellow);
+      border-bottom: 2px solid var(--yellow);
+    }
+    .my-rank-row td { font-weight: 600; }
+    .my-rank-sticky {
+      position: sticky;
+      bottom: 0;
+      background: var(--card-bg);
+      border-top: 2px solid var(--yellow);
+      z-index: 10;
+    }
+    .leaderboard-table tbody tr { cursor: pointer; transition: background 0.15s; }
+    .leaderboard-table tbody tr:hover { background: rgba(255,255,255,0.05); }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 680px;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 24px;
+      position: relative;
+    }
+    .modal-close {
+      position: absolute; top: 16px; right: 16px;
+      background: none; border: none;
+      color: var(--gray); font-size: 1.4rem;
+      cursor: pointer; line-height: 1;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-header { margin-bottom: 20px; }
+    .modal-header h2 { margin: 0 0 4px; }
+    .modal-header p { color: var(--gray); margin: 0; font-size: 0.9rem; }
+    .modal-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-box {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    .stat-box .stat-value { font-size: 1.6rem; font-weight: 700; color: var(--yellow); }
+    .stat-box .stat-label { font-size: 0.75rem; color: var(--gray); margin-top: 4px; }
+
+    /* Confidence bar chart */
+    .confidence-chart { margin-bottom: 24px; }
+    .confidence-chart h4 { color: var(--yellow); margin-bottom: 12px; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .conf-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 0.85rem; }
+    .conf-bar-label { width: 60px; color: var(--gray); text-align: right; flex-shrink: 0; }
+    .conf-bar-track { flex: 1; background: rgba(255,255,255,0.06); border-radius: 4px; height: 22px; overflow: hidden; }
+    .conf-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-size: 0.78rem; font-weight: 600; transition: width 0.6s ease; min-width: 0; }
+    .conf-bar-fill.high { background: linear-gradient(90deg, #22c55e, #16a34a); color: #fff; }
+    .conf-bar-fill.medium { background: linear-gradient(90deg, #eab308, #ca8a04); color: #000; }
+    .conf-bar-fill.low { background: linear-gradient(90deg, #ef4444, #dc2626); color: #fff; }
+    .conf-bar-fill.none { background: rgba(255,255,255,0.15); color: var(--gray); }
+    .conf-bar-count { width: 30px; color: var(--gray); font-size: 0.8rem; flex-shrink: 0; }
+
+    /* Prediction history table */
+    .pred-history h4 { color: var(--yellow); margin-bottom: 12px; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pred-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    .pred-table th { color: var(--gray); font-weight: 500; padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+    .pred-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+    .pred-table tr:last-child td { border-bottom: none; }
+    .outcome-pill {
+      display: inline-block; padding: 2px 8px; border-radius: 20px;
+      font-size: 0.75rem; font-weight: 600;
+    }
+    .outcome-pill.correct { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .outcome-pill.wrong { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .outcome-pill.pending { background: rgba(156,163,175,0.15); color: #9ca3af; }
+    .conf-badge {
+      display: inline-block; padding: 1px 7px; border-radius: 20px;
+      font-size: 0.72rem; font-weight: 600;
+    }
+    .conf-badge.high { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .conf-badge.medium { background: rgba(234,179,8,0.15); color: #eab308; }
+    .conf-badge.low { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .points-earned { font-weight: 700; color: var(--yellow); }
+    .modal-loading { text-align: center; padding: 40px; color: var(--gray); }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="logo">CADT<span>ML</span> CUP <span class="year">2026</span></div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="matches.html">Matches</a>
+      <a href="leaderboard.html">Leaderboard</a>
+      <a href="admin.html" id="nav-admin" style="display:none;">Admin</a>
+      <div id="nav-guest">
+        <a href="login.html">Login</a>
+        <a href="signup.html" class="btn btn-primary btn-sm">Sign Up</a>
+      </div>
+      <div id="nav-user" style="display:none;">
+        <span class="nav-username" id="nav-username"></span>
+        <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="section-title">🏆 Leaderboard</div>
+    <p style="color: var(--gray); margin-bottom: 20px;">
+      Ranking of all students competing for the CADTML Cup 2026.
+      <span style="font-size:0.8rem;">Click any student to view their prediction history.</span>
+    </p>
+
+    <div id="leaderboard-container">
+      <div class="loading">Loading leaderboard...</div>
+    </div>
+  </div>
+
+  <!-- Student Profile Modal -->
+  <div class="modal-overlay" id="profile-modal">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <div id="modal-content"><div class="modal-loading">Loading...</div></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Real Data. Real Matches. Real Impact. — CADT MAKERSPACE
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="shared/supabase-client.js"></script>
+  <script src="shared/auth.js"></script>
+  <script>
+    let currentProfile = null;
+
+    async function loadLeaderboard() {
+      currentProfile = await getCurrentProfile();
+
+      const { data, error } = await supabaseClient
+        .from('leaderboard')
+        .select('*')
+        .order('total_points', { ascending: false });
+
+      const container = document.getElementById('leaderboard-container');
+
+      if (error) {
+        container.innerHTML = `<div class="error-msg">Error loading leaderboard: ${error.message}</div>`;
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        container.innerHTML = `<div class="empty-state">No rankings yet. Predictions will appear here once entered.</div>`;
+        return;
+      }
+
+      // Find current user's rank
+      const myRankIndex = currentProfile
+        ? data.findIndex(r => r.user_id === currentProfile.id)
+        : -1;
+
+      const renderRow = (row, rank, extraClass = '') => {
+        let medal = rank;
+        let rankClass = '';
+        if (rank === 1) { rankClass = 'rank-1'; medal = '🥇'; }
+        else if (rank === 2) { rankClass = 'rank-2'; medal = '🥈'; }
+        else if (rank === 3) { rankClass = 'rank-3'; medal = '🥉'; }
+
+        const isMe = currentProfile && row.user_id === currentProfile.id;
+
+        return `
+          <tr class="${isMe ? 'my-rank-row' : ''} ${extraClass}"
+              onclick="openProfile(${row.user_id}, '${row.username}', '${row.full_name || row.username}')"
+              title="View ${row.full_name || row.username}'s predictions">
+            <td class="rank-cell ${rankClass}">${medal}${isMe ? ' 👤' : ''}</td>
+            <td>
+              <strong>${row.full_name || row.username}</strong><br>
+              <span style="color: var(--gray); font-size: 0.8rem;">@${row.username}${row.team_name ? ' · ' + row.team_name : ''}</span>
+            </td>
+            <td>${row.predictions_made}</td>
+            <td>${row.correct_outcomes}</td>
+            <td class="points-cell">${row.total_points}</td>
+          </tr>
+        `;
+      };
+
+      const tableRows = data.map((row, i) => renderRow(row, i + 1)).join('');
+
+      // Sticky bottom row for current user if they exist and are not in top visible area
+      const stickyRow = (myRankIndex >= 0)
+        ? `<tfoot>
+            <tr class="my-rank-sticky" onclick="openProfile(${data[myRankIndex].user_id}, '${data[myRankIndex].username}', '${data[myRankIndex].full_name || data[myRankIndex].username}')" title="Your rank">
+              <td class="rank-cell">#${myRankIndex + 1} 👤</td>
+              <td>
+                <strong>${data[myRankIndex].full_name || data[myRankIndex].username} (You)</strong><br>
+                <span style="color: var(--gray); font-size: 0.8rem;">@${data[myRankIndex].username}</span>
+              </td>
+              <td>${data[myRankIndex].predictions_made}</td>
+              <td>${data[myRankIndex].correct_outcomes}</td>
+              <td class="points-cell">${data[myRankIndex].total_points}</td>
+            </tr>
+          </tfoot>`
+        : '';
+
+      container.innerHTML = `
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Student</th>
+              <th>Predictions</th>
+              <th>Correct</th>
+              <th>Points</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+          ${stickyRow}
+        </table>
+      `;
+    }
+
+    // ── MODAL ──────────────────────────────────────────
+
+    async function openProfile(userId, username, fullName) {
+      document.getElementById('profile-modal').classList.add('open');
+      document.getElementById('modal-content').innerHTML = `<div class="modal-loading">Loading ${fullName}'s predictions...</div>`;
+
+      // Fetch predictions with match info
+      const { data, error } = await supabaseClient
+        .from('predictions')
+        .select('*, matches(team_home, team_away, team_home_flag, team_away_flag, match_date, actual_home_score, actual_away_score, actual_outcome, status)')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        document.getElementById('modal-content').innerHTML = `<div class="error-msg">${error.message}</div>`;
+        return;
+      }
+
+      const total = data.length;
+      const totalPoints = data.reduce((sum, p) => sum + (p.points_earned || 0), 0);
+      const correct = data.filter(p => p.points_earned >= 3).length;
+      const exactScore = data.filter(p => p.points_earned >= 8).length;
+
+      // Confidence breakdown
+      const confCounts = { high: 0, medium: 0, low: 0, none: 0 };
+      const confCorrect = { high: 0, medium: 0, low: 0, none: 0 };
+      data.forEach(p => {
+        const key = p.confidence || 'none';
+        confCounts[key]++;
+        if (p.points_earned >= 3) confCorrect[key]++;
+      });
+
+      const confBar = (label, key, color) => {
+        const count = confCounts[key];
+        const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+        const correctPct = count > 0 ? Math.round((confCorrect[key] / count) * 100) : 0;
+        return `
+          <div class="conf-bar-row">
+            <span class="conf-bar-label">${label}</span>
+            <div class="conf-bar-track">
+              <div class="conf-bar-fill ${key}" style="width:${pct}%">
+                ${pct > 10 ? correctPct + '% correct' : ''}
+              </div>
+            </div>
+            <span class="conf-bar-count">${count}</span>
+          </div>
+        `;
+      };
+
+      // Prediction history rows
+      const predRows = data.map(p => {
+        const m = p.matches;
+        if (!m) return '';
+
+        const isPending = m.status !== 'finished';
+        const isCorrect = !isPending && p.predicted_outcome === m.actual_outcome;
+        const outcomeLabel = isPending ? 'Pending' : (isCorrect ? '✓ Correct' : '✗ Wrong');
+        const outcomeClass = isPending ? 'pending' : (isCorrect ? 'correct' : 'wrong');
+
+        const matchDate = new Date(m.match_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const actualScore = m.status === 'finished'
+          ? `${m.actual_home_score}–${m.actual_away_score}`
+          : '–';
+        const predScore = (p.predicted_home_score != null && p.predicted_away_score != null)
+          ? `${p.predicted_home_score}–${p.predicted_away_score}`
+          : '–';
+        const confClass = p.confidence || 'none';
+
+        return `
+          <tr>
+            <td>${matchDate}</td>
+            <td>${m.team_home_flag || ''} ${m.team_home} vs ${m.team_away} ${m.team_away_flag || ''}</td>
+            <td>${predScore}</td>
+            <td>${actualScore}</td>
+            <td>${p.confidence ? `<span class="conf-badge ${confClass}">${p.confidence}</span>` : '–'}</td>
+            <td><span class="outcome-pill ${outcomeClass}">${outcomeLabel}</span></td>
+            <td class="points-earned">${isPending ? '–' : (p.points_earned || 0)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('modal-content').innerHTML = `
+        <div class="modal-header">
+          <h2>${fullName}</h2>
+          <p>@${username} · Prediction History</p>
+        </div>
+
+        <div class="modal-stats">
+          <div class="stat-box">
+            <div class="stat-value">${totalPoints}</div>
+            <div class="stat-label">Total Points</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value">${total}</div>
+            <div class="stat-label">Predictions</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value">${correct}</div>
+            <div class="stat-label">Correct Outcomes</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value">${total > 0 ? Math.round(correct/total*100) : 0}%</div>
+            <div class="stat-label">Accuracy</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value">${exactScore}</div>
+            <div class="stat-label">Exact Scores</div>
+          </div>
+        </div>
+
+        <div class="confidence-chart">
+          <h4>📊 Confidence Breakdown</h4>
+          ${confBar('High', 'high', 'high')}
+          ${confBar('Medium', 'medium', 'medium')}
+          ${confBar('Low', 'low', 'low')}
+          ${confBar('None', 'none', 'none')}
+        </div>
+
+        <div class="pred-history">
+          <h4>📋 All Predictions</h4>
+          ${data.length === 0
+            ? `<div class="empty-state">No predictions yet.</div>`
+            : `<table class="pred-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Match</th>
+                    <th>Predicted</th>
+                    <th>Actual</th>
+                    <th>Confidence</th>
+                    <th>Result</th>
+                    <th>Pts</th>
+                  </tr>
+                </thead>
+                <tbody>${predRows}</tbody>
+              </table>`
+          }
+        </div>
+      `;
+    }
+
+    function closeModal() {
+      document.getElementById('profile-modal').classList.remove('open');
+    }
+
+    // Close modal on overlay click
+    document.getElementById('profile-modal').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('profile-modal')) closeModal();
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    loadLeaderboard();
+    setInterval(loadLeaderboard, 30000);
+    updateNavbar();
+  </script>
+</body>
+</html>

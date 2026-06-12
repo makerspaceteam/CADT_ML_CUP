@@ -1,0 +1,428 @@
+/* ============================================
+   CADTML CUP 2026 - SHARED STYLES
+   ============================================ */
+
+:root {
+  --navy: #0b1530;
+  --navy-light: #14213f;
+  --navy-card: #101c3e;
+  --yellow: #ffd200;
+  --green: #8bc53f;
+  --red: #c0392b;
+  --white: #ffffff;
+  --gray: #9aa5c1;
+  --border: #233055;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: var(--navy);
+  color: var(--white);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+a { color: var(--yellow); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---------- NAVBAR ---------- */
+.navbar {
+  background: var(--navy-light);
+  border-bottom: 3px solid var(--yellow);
+  padding: 14px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.navbar .logo {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.navbar .logo span { color: var(--yellow); }
+.navbar .logo .year { color: var(--green); }
+
+.nav-links {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.nav-links a {
+  color: var(--white);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.nav-links a:hover { color: var(--yellow); text-decoration: none; }
+
+#nav-guest, #nav-user { display: flex; gap: 16px; align-items: center; }
+
+.nav-username {
+  color: var(--green);
+  font-weight: 700;
+}
+
+/* ---------- LAYOUT ---------- */
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* ---------- HERO ---------- */
+.hero {
+  text-align: center;
+  padding: 60px 24px;
+  background: linear-gradient(180deg, var(--navy-light) 0%, var(--navy) 100%);
+  border-bottom: 4px solid var(--green);
+}
+
+.hero h1 {
+  font-size: 3.2rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+
+.hero h1 .ml { color: var(--yellow); }
+.hero h1 .year { color: var(--yellow); font-style: italic; }
+
+.hero p.tagline {
+  margin-top: 12px;
+  font-size: 1.1rem;
+  color: var(--gray);
+}
+
+.hero .badge {
+  display: inline-block;
+  margin-top: 20px;
+  background: var(--red);
+  padding: 8px 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  border-radius: 4px;
+}
+
+/* ---------- BUTTONS ---------- */
+.btn {
+  display: inline-block;
+  padding: 10px 22px;
+  border-radius: 6px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: transform 0.1s ease, opacity 0.15s ease;
+}
+
+.btn:hover { opacity: 0.85; text-decoration: none; }
+.btn:active { transform: scale(0.98); }
+
+.btn-primary { background: var(--yellow); color: var(--navy); }
+.btn-secondary { background: var(--green); color: var(--navy); }
+.btn-outline { background: transparent; border: 2px solid var(--yellow); color: var(--yellow); }
+.btn-danger { background: var(--red); color: var(--white); }
+.btn-sm { padding: 6px 14px; font-size: 0.85rem; }
+
+/* ---------- CARDS ---------- */
+.card {
+  background: var(--navy-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.section-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  margin-bottom: 16px;
+  border-left: 6px solid var(--yellow);
+  padding-left: 12px;
+}
+
+/* ---------- FORMS ---------- */
+.form-group { margin-bottom: 16px; }
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--gray);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--navy);
+  color: var(--white);
+  font-size: 0.95rem;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--yellow);
+}
+
+.auth-box {
+  max-width: 420px;
+  margin: 60px auto;
+}
+
+.error-msg {
+  background: rgba(192, 57, 43, 0.2);
+  border: 1px solid var(--red);
+  color: #ff8a80;
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+.success-msg {
+  background: rgba(139, 197, 63, 0.15);
+  border: 1px solid var(--green);
+  color: var(--green);
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+/* ---------- MATCH FILTERS / TABS ---------- */
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.filter-btn {
+  background: var(--navy-card);
+  border: 1px solid var(--border);
+  color: var(--gray);
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.filter-btn.active {
+  background: var(--yellow);
+  color: var(--navy);
+  border-color: var(--yellow);
+}
+
+/* ---------- MATCH CARD ---------- */
+.match-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.match-card {
+  background: var(--navy-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.match-card.live { border-color: var(--red); box-shadow: 0 0 0 1px var(--red); }
+
+.match-meta {
+  font-size: 0.8rem;
+  color: var(--gray);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.status-pill {
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-upcoming { background: var(--border); color: var(--gray); }
+.status-live {
+  background: var(--red);
+  color: var(--white);
+  animation: pulse 1.5s infinite;
+}
+.status-finished { background: var(--green); color: var(--navy); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.teams-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  flex: 1;
+  justify-content: center;
+}
+
+.team-name { min-width: 110px; text-align: center; }
+.team-flag { font-size: 1.6rem; }
+
+.score-box {
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: var(--yellow);
+  min-width: 70px;
+  text-align: center;
+}
+
+.vs-label {
+  color: var(--gray);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.match-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ---------- LEADERBOARD ---------- */
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--navy-card);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.leaderboard-table th {
+  background: var(--navy-light);
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--yellow);
+  border-bottom: 2px solid var(--border);
+}
+
+.leaderboard-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+
+.leaderboard-table tr:last-child td { border-bottom: none; }
+
+.rank-cell {
+  font-weight: 900;
+  font-size: 1.1rem;
+  width: 50px;
+}
+
+.rank-1 { color: var(--yellow); }
+.rank-2 { color: #d4d4d4; }
+.rank-3 { color: #e0a96d; }
+
+.points-cell { font-weight: 800; color: var(--green); }
+
+/* ---------- ADMIN ---------- */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.admin-table th, .admin-table td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.admin-table th { background: var(--navy-light); color: var(--yellow); }
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  color: var(--gray);
+  padding: 10px 20px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-bottom: 3px solid transparent;
+}
+
+.tab-btn.active {
+  color: var(--yellow);
+  border-bottom-color: var(--yellow);
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ---------- FOOTER ---------- */
+.footer {
+  text-align: center;
+  padding: 24px;
+  color: var(--gray);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border);
+  margin-top: 40px;
+}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width: 640px) {
+  .hero h1 { font-size: 2.2rem; }
+  .teams-row { font-size: 0.95rem; gap: 8px; }
+  .team-name { min-width: 80px; }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: var(--gray);
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--gray);
+}

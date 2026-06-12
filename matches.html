@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Matches - CADTML Cup 2026</title>
+  <link rel="stylesheet" href="shared/style.css">
+  <style>
+    /* ── Prediction Panel ── */
+    .match-card {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .match-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 12px;
+    }
+
+    .match-meta-col {
+      flex: 1;
+      min-width: 150px;
+    }
+
+    .predict-toggle-btn {
+      background: transparent;
+      border: 1px solid var(--yellow, #f5c518);
+      color: var(--yellow, #f5c518);
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .predict-toggle-btn:hover,
+    .predict-toggle-btn.open {
+      background: var(--yellow, #f5c518);
+      color: #111;
+    }
+    .predict-toggle-btn.submitted {
+      border-color: #4caf80;
+      color: #4caf80;
+    }
+    .predict-toggle-btn.submitted:hover,
+    .predict-toggle-btn.submitted.open {
+      background: #4caf80;
+      color: #111;
+    }
+
+    .prediction-panel {
+      display: none;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 14px;
+      margin-top: 4px;
+      animation: slideDown 0.18s ease;
+    }
+    .prediction-panel.visible {
+      display: block;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .predict-form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .predict-form-grid .form-group {
+      margin: 0;
+    }
+
+    .predict-form-grid label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--gray, #aaa);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .predict-form-grid input,
+    .predict-form-grid select {
+      width: 100%;
+      padding: 7px 10px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 0.88rem;
+      box-sizing: border-box;
+    }
+    .predict-form-grid input:focus,
+    .predict-form-grid select:focus {
+      outline: none;
+      border-color: var(--yellow, #f5c518);
+    }
+    .predict-form-grid select option {
+      background: #1a1a2e;
+    }
+
+    .predict-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .predict-submit-btn {
+      background: var(--yellow, #f5c518);
+      color: #111;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .predict-submit-btn:hover { opacity: 0.85; }
+    .predict-submit-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .predict-msg {
+      font-size: 0.8rem;
+      padding: 5px 10px;
+      border-radius: 5px;
+    }
+    .predict-msg.success { color: #4caf80; background: rgba(76,175,128,0.1); }
+    .predict-msg.error   { color: #f55; background: rgba(255,85,85,0.1); }
+
+    .prediction-existing {
+      font-size: 0.78rem;
+      color: var(--gray, #aaa);
+      font-style: italic;
+    }
+    .prediction-existing strong { color: #fff; font-style: normal; }
+
+    /* Confidence % input */
+    .conf-input-wrap {
+      position: relative;
+    }
+    .conf-input-wrap input[type="number"] {
+      padding-right: 28px;
+    }
+    .conf-pct-symbol {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray, #aaa);
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+    .conf-badge {
+      display: inline-block;
+      margin-top: 5px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 2px 8px;
+      border-radius: 20px;
+      transition: background 0.2s, color 0.2s;
+    }
+    .conf-badge.low    { background: rgba(255,100,100,0.15); color: #f55; }
+    .conf-badge.medium { background: rgba(245,197,24,0.15);  color: #f5c518; }
+    .conf-badge.high   { background: rgba(76,175,128,0.15);  color: #4caf80; }
+    .conf-badge.none   { background: rgba(255,255,255,0.05); color: #aaa; }
+
+    /* Login nudge */
+    .predict-login-nudge {
+      font-size: 0.8rem;
+      color: var(--gray, #aaa);
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .predict-login-nudge a {
+      color: var(--yellow, #f5c518);
+      text-decoration: none;
+    }
+
+    /* Score display improvement */
+    .teams-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 10px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="logo">CADT<span>ML</span> CUP <span class="year">2026</span></div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="matches.html">Matches</a>
+      <a href="leaderboard.html">Leaderboard</a>
+      <a href="admin.html" id="nav-admin" style="display:none;">Admin</a>
+      <div id="nav-guest">
+        <a href="login.html">Login</a>
+        <a href="signup.html" class="btn btn-primary btn-sm">Sign Up</a>
+      </div>
+      <div id="nav-user" style="display:none;">
+        <span class="nav-username" id="nav-username"></span>
+        <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="section-title">Match Schedule</div>
+
+    <div class="filter-bar" id="status-filter">
+      <button class="filter-btn active" data-status="all">All</button>
+      <button class="filter-btn" data-status="live">🔴 Live</button>
+      <button class="filter-btn" data-status="upcoming">Upcoming</button>
+      <button class="filter-btn" data-status="finished">Finished</button>
+    </div>
+
+    <div class="filter-bar" id="stage-filter">
+      <button class="filter-btn active" data-stage="all">All Stages</button>
+      <button class="filter-btn" data-stage="group">Group Stage</button>
+      <button class="filter-btn" data-stage="round16">Round of 16</button>
+      <button class="filter-btn" data-stage="quarter">Quarter-Finals</button>
+      <button class="filter-btn" data-stage="semi">Semi-Finals</button>
+      <button class="filter-btn" data-stage="third_place">3rd Place</button>
+      <button class="filter-btn" data-stage="final">Final</button>
+    </div>
+
+    <div id="matches-container" class="match-grid">
+      <div class="loading">Loading matches...</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Real Data. Real Matches. Real Impact. — CADT MAKERSPACE
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="shared/supabase-client.js"></script>
+  <script src="shared/auth.js"></script>
+  <script src="shared/sportsdb.js"></script>
+  <script>
+    let allMatches = [];
+    let currentStatusFilter = 'all';
+    let currentStageFilter = 'all';
+    let currentUser = null;
+    // Map of match_id -> existing prediction for the current user
+    let myPredictions = {};
+
+    const STAGE_LABELS = {
+      group: 'Group Stage',
+      round16: 'Round of 16',
+      quarter: 'Quarter-Final',
+      semi: 'Semi-Final',
+      third_place: '3rd Place Playoff',
+      final: 'Final'
+    };
+
+    async function init() {
+      // Get current session
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      currentUser = session?.user ?? null;
+
+      await Promise.all([
+        loadMatches(),
+        currentUser ? loadMyPredictions() : Promise.resolve()
+      ]);
+
+      updateNavbar();
+    }
+
+    async function loadMatches() {
+      const { data, error } = await supabaseClient
+        .from('matches')
+        .select('*')
+        .order('match_date', { ascending: true });
+
+      if (error) {
+        document.getElementById('matches-container').innerHTML =
+          `<div class="error-msg">Error loading matches: ${error.message}</div>`;
+        return;
+      }
+
+      allMatches = data;
+      renderMatches();
+    }
+
+    async function loadMyPredictions() {
+      if (!currentUser) return;
+      const { data, error } = await supabaseClient
+        .from('predictions')
+        .select('*')
+        .eq('user_id', currentUser.id);
+
+      if (!error && data) {
+        myPredictions = {};
+        data.forEach(p => { myPredictions[p.match_id] = p; });
+      }
+    }
+
+    function formatDate(dateStr) {
+      const d = new Date(dateStr);
+      return d.toLocaleString(undefined, {
+        weekday: 'short', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    function renderMatches() {
+      const container = document.getElementById('matches-container');
+
+      let filtered = allMatches;
+      if (currentStatusFilter !== 'all') {
+        filtered = filtered.filter(m => m.status === currentStatusFilter);
+      }
+      if (currentStageFilter !== 'all') {
+        filtered = filtered.filter(m => m.stage === currentStageFilter);
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-state">No matches found for this filter.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(m => buildMatchCard(m)).join('');
+    }
+
+    function buildMatchCard(m) {
+      const isLive = m.status === 'live';
+      const isFinished = m.status === 'finished';
+      const isUpcoming = m.status === 'upcoming';
+
+      // Score or VS
+      let scoreDisplay = '';
+      if (isFinished || isLive) {
+        scoreDisplay = `<div class="score-box">${m.actual_home_score ?? '-'} : ${m.actual_away_score ?? '-'}</div>`;
+      } else {
+        scoreDisplay = `<div class="vs-label">VS</div>`;
+      }
+
+      const stageLabel = m.group_name
+        ? `Group ${m.group_name}`
+        : (STAGE_LABELS[m.stage] || m.stage);
+
+      // Prediction button & panel
+      const existingPred = myPredictions[m.id];
+      let predictionSection = '';
+
+      if (!currentUser) {
+        // Not logged in — show nudge
+        predictionSection = `
+          <div class="predict-login-nudge">
+            <a href="login.html">Log in</a> or <a href="signup.html">sign up</a> to submit your prediction.
+          </div>
+        `;
+      } else if (isFinished) {
+        // Match over — show their prediction if they made one, or nothing
+        if (existingPred) {
+          predictionSection = `
+            <div class="prediction-existing">
+              Your prediction: <strong>${existingPred.predicted_home_score ?? '-'} : ${existingPred.predicted_away_score ?? '-'}</strong>
+              · <strong>${existingPred.predicted_outcome || '-'}</strong>
+              ${existingPred.confidence_pct != null ? `· Confidence: <strong>${existingPred.confidence_pct}%</strong> (${confPctToLabel(existingPred.confidence_pct)})` : ''}
+              ${existingPred.points_earned != null ? `· Points: <strong style="color:#f5c518">${existingPred.points_earned}</strong>` : ''}
+            </div>
+          `;
+        } else {
+          predictionSection = `<div class="prediction-existing">Match finished — no prediction submitted.</div>`;
+        }
+      } else {
+        // Upcoming or live — allow prediction
+        const hasExisting = !!existingPred;
+        const btnLabel = hasExisting ? '✏️ Edit Prediction' : '🎯 Predict';
+        const btnClass = hasExisting ? 'predict-toggle-btn submitted' : 'predict-toggle-btn';
+
+        const homeVal   = existingPred?.predicted_home_score ?? '';
+        const awayVal   = existingPred?.predicted_away_score ?? '';
+        const outcomeVal = existingPred?.predicted_outcome ?? 'home';
+
+        predictionSection = `
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
+            <button class="${btnClass}" id="toggle-btn-${m.id}" onclick="togglePredictPanel(${m.id})">${btnLabel}</button>
+            ${hasExisting ? `
+              <div class="prediction-existing">
+                Current: <strong>${homeVal} : ${awayVal}</strong>
+                · <strong>${outcomeVal}</strong>
+                ${existingPred?.confidence_pct != null ? `· <strong>${existingPred.confidence_pct}%</strong> (${confPctToLabel(existingPred.confidence_pct)})` : ''}
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="prediction-panel" id="predict-panel-${m.id}">
+            <div class="predict-form-grid">
+              <div class="form-group">
+                <label>${m.team_home} Score</label>
+                <input type="number" min="0" max="20" id="pred-home-${m.id}"
+                       value="${homeVal}" placeholder="0">
+              </div>
+              <div class="form-group">
+                <label>${m.team_away} Score</label>
+                <input type="number" min="0" max="20" id="pred-away-${m.id}"
+                       value="${awayVal}" placeholder="0">
+              </div>
+              <div class="form-group">
+                <label>Outcome</label>
+                <select id="pred-outcome-${m.id}">
+                  <option value="home"  ${outcomeVal==='home'  ? 'selected':''}>🏠 ${m.team_home} Win</option>
+                  <option value="draw"  ${outcomeVal==='draw'  ? 'selected':''}>🤝 Draw</option>
+                  <option value="away"  ${outcomeVal==='away'  ? 'selected':''}>✈️ ${m.team_away} Win</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Confidence (ML %)</label>
+                <div class="conf-input-wrap">
+                  <input type="number" min="0" max="100" id="pred-conf-${m.id}"
+                         value="${existingPred?.confidence_pct ?? ''}"
+                         placeholder="e.g. 75"
+                         oninput="updateConfBadge(${m.id}, this.value)">
+                  <span class="conf-pct-symbol">%</span>
+                </div>
+                <span class="conf-badge ${existingPred?.confidence_pct != null ? confPctToLabel(existingPred.confidence_pct).toLowerCase() : 'none'}" id="conf-badge-${m.id}">${existingPred?.confidence_pct != null ? confPctToLabel(existingPred.confidence_pct) : '—'}</span>
+              </div>
+            </div>
+            <div class="predict-actions">
+              <button class="predict-submit-btn" id="pred-submit-${m.id}"
+                      onclick="submitPrediction(${m.id}, '${m.team_home}', '${m.team_away}')">
+                Save Prediction
+              </button>
+              <span class="predict-msg" id="pred-msg-${m.id}" style="display:none;"></span>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="match-card ${isLive ? 'live' : ''}" id="match-card-${m.id}">
+          <div class="match-top">
+            <div class="match-meta-col">
+              <div class="match-meta">
+                <span class="status-pill status-${m.status}">${m.status}</span>
+                <span>${stageLabel}</span>
+                <span>${formatDate(m.match_date)}</span>
+                ${m.venue ? `<span>📍 ${m.venue}</span>` : ''}
+              </div>
+            </div>
+          </div>
+          <div class="teams-row">
+            <span class="team-name">${m.team_home_flag || ''} ${m.team_home}</span>
+            ${scoreDisplay}
+            <span class="team-name">${m.team_away} ${m.team_away_flag || ''}</span>
+          </div>
+          ${predictionSection}
+        </div>
+      `;
+    }
+
+    function togglePredictPanel(matchId) {
+      const panel = document.getElementById(`predict-panel-${matchId}`);
+      const btn   = document.getElementById(`toggle-btn-${matchId}`);
+      const isOpen = panel.classList.contains('visible');
+      panel.classList.toggle('visible', !isOpen);
+      btn.classList.toggle('open', !isOpen);
+    }
+
+    async function submitPrediction(matchId, teamHome, teamAway) {
+      const msgEl  = document.getElementById(`pred-msg-${matchId}`);
+      const btn    = document.getElementById(`pred-submit-${matchId}`);
+      const homeScore  = document.getElementById(`pred-home-${matchId}`).value;
+      const awayScore  = document.getElementById(`pred-away-${matchId}`).value;
+      const outcome    = document.getElementById(`pred-outcome-${matchId}`).value;
+      const confPctRaw = document.getElementById(`pred-conf-${matchId}`).value;
+      const confPct    = confPctRaw !== '' ? parseInt(confPctRaw) : null;
+      const confidence = confPct != null ? confPctToLabel(confPct).toLowerCase() : null;
+
+      if (homeScore === '' || awayScore === '') {
+        showPredMsg(msgEl, 'error', 'Enter both scores.');
+        return;
+      }
+      if (confPct !== null && (confPct < 0 || confPct > 100)) {
+        showPredMsg(msgEl, 'error', 'Confidence must be 0–100%.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+
+      const payload = {
+        user_id: currentUser.id,
+        match_id: matchId,
+        predicted_home_score: parseInt(homeScore),
+        predicted_away_score: parseInt(awayScore),
+        predicted_outcome: outcome,
+        confidence: confidence,
+        confidence_pct: confPct,
+        source: 'web'
+      };
+
+      const { error } = await supabaseClient
+        .from('predictions')
+        .upsert(payload, { onConflict: 'user_id,match_id' });
+
+      btn.disabled = false;
+      btn.textContent = 'Save Prediction';
+
+      if (error) {
+        showPredMsg(msgEl, 'error', error.message);
+        return;
+      }
+
+      myPredictions[matchId] = { ...payload };
+      showPredMsg(msgEl, 'success', '✅ Prediction saved!');
+
+      const toggleBtn = document.getElementById(`toggle-btn-${matchId}`);
+      if (toggleBtn) {
+        toggleBtn.textContent = '✏️ Edit Prediction';
+        toggleBtn.classList.add('submitted');
+      }
+    }
+
+    // Map 0-100% → low / medium / high
+    function confPctToLabel(pct) {
+      if (pct == null || pct === '') return '—';
+      const n = parseInt(pct);
+      if (n < 40)  return 'Low';
+      if (n < 70)  return 'Medium';
+      return 'High';
+    }
+
+    // Live-update the badge as user types
+    function updateConfBadge(matchId, val) {
+      const badge = document.getElementById(`conf-badge-${matchId}`);
+      if (!badge) return;
+      if (val === '' || val == null) {
+        badge.className = 'conf-badge none';
+        badge.textContent = '—';
+        return;
+      }
+      const n = parseInt(val);
+      if (isNaN(n)) return;
+      const label = confPctToLabel(n);
+      const cls   = label.toLowerCase();
+      badge.className = `conf-badge ${cls}`;
+      badge.textContent = label;
+    }
+
+    function showPredMsg(el, type, text) {
+      el.className = `predict-msg ${type}`;
+      el.textContent = text;
+      el.style.display = 'inline-block';
+      if (type === 'success') {
+        setTimeout(() => { el.style.display = 'none'; }, 3000);
+      }
+    }
+
+    // Filter button handlers
+    document.querySelectorAll('#status-filter .filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#status-filter .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentStatusFilter = btn.dataset.status;
+        renderMatches();
+      });
+    });
+
+    document.querySelectorAll('#stage-filter .filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#stage-filter .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentStageFilter = btn.dataset.stage;
+        renderMatches();
+      });
+    });
+
+    // Auto-refresh every 30s
+    init();
+    setInterval(async () => {
+      await loadMatches();
+      if (currentUser) await loadMyPredictions();
+    }, 30000);
+  </script>
+</body>
+</html>

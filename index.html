@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CADTML Cup 2026</title>
+  <link rel="stylesheet" href="shared/style.css">
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="logo">CADT<span>ML</span> CUP <span class="year">2026</span></div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="matches.html">Matches</a>
+      <a href="leaderboard.html">Leaderboard</a>
+      <a href="admin.html" id="nav-admin" style="display:none;">Admin</a>
+      <div id="nav-guest">
+        <a href="login.html">Login</a>
+        <a href="signup.html" class="btn btn-primary btn-sm">Sign Up</a>
+      </div>
+      <div id="nav-user" style="display:none;">
+        <span class="nav-username" id="nav-username"></span>
+        <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <h1>CADT<span class="ml">ML</span> CUP <span class="year">2026</span></h1>
+    <p class="tagline">Can your model predict the World Cup?</p>
+    <div class="badge">A MACHINE LEARNING & DATA ANALYTICS CHALLENGE</div>
+    <div style="margin-top: 28px;">
+      <a href="matches.html" class="btn btn-primary">View Matches</a>
+      <a href="leaderboard.html" class="btn btn-secondary">Leaderboard</a>
+    </div>
+  </section>
+
+  <div class="container">
+    <div class="section-title">How It Works</div>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap:16px; margin-bottom: 40px;">
+      <div class="card">
+        <h3 style="color: var(--yellow);">1. Register</h3>
+        <p>Sign up with your CADT account to join the challenge.</p>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--yellow);">2. Build Your Model</h3>
+        <p>Use any data, tools, and ML techniques to create your prediction strategy.</p>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--yellow);">3. Submit Predictions</h3>
+        <p>Before each match, submit your predicted score and confidence via the Google Form.</p>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--yellow);">4. Earn Points</h3>
+        <p>Score points based on how accurate your predictions are.</p>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--yellow);">5. Climb the Leaderboard</h3>
+        <p>Compete throughout the tournament. Top predictor wins the CADTML Cup!</p>
+      </div>
+    </div>
+
+    <div class="section-title">Scoring System</div>
+    <table class="leaderboard-table" style="margin-bottom: 40px;">
+      <thead>
+        <tr><th>Prediction</th><th>Points</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Correct Match Outcome (Win/Loss/Draw)</td><td class="points-cell">3</td></tr>
+        <tr><td>Correct Goal Difference</td><td class="points-cell">2</td></tr>
+        <tr><td>Exact Final Score (bonus)</td><td class="points-cell">+5</td></tr>
+        <tr><td>Correct High-Confidence Prediction (bonus)</td><td class="points-cell">+2</td></tr>
+      </tbody>
+    </table>
+    <p style="text-align:center; color: var(--gray); margin-bottom: 40px;">Maximum points per match: <strong style="color: var(--yellow);">12</strong></p>
+  </div>
+
+  <div class="footer">
+    Real Data. Real Matches. Real Impact. — CADT MAKERSPACE
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="shared/supabase-client.js"></script>
+  <script src="shared/auth.js"></script>
+  <script>
+    updateNavbar();
+  </script>
+</body>
+</html>

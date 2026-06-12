@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up - CADTML Cup 2026</title>
+  <link rel="stylesheet" href="shared/style.css">
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="logo">CADT<span>ML</span> CUP <span class="year">2026</span></div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="matches.html">Matches</a>
+      <a href="leaderboard.html">Leaderboard</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="auth-box card">
+      <div class="section-title">Sign Up</div>
+      <div id="msg-area"></div>
+
+      <form id="signup-form">
+        <div class="form-group">
+          <label for="full_name">Full Name</label>
+          <input type="text" id="full_name" required placeholder="Sok Dara">
+        </div>
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" required placeholder="sokdara">
+        </div>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" required placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" required minlength="6" placeholder="At least 6 characters">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;">Create Account</button>
+      </form>
+
+      <p style="margin-top: 16px; text-align: center; color: var(--gray);">
+        Already have an account? <a href="login.html">Log in</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="shared/supabase-client.js"></script>
+<script src="shared/auth.js"></script>
+<script>
+  const form = document.getElementById('signup-form');
+  const msgArea = document.getElementById('msg-area');
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    msgArea.innerHTML = '';
+
+    const fullName = document.getElementById('full_name').value.trim();
+    const username = document.getElementById('username').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    // ✅ Show loading so you know the button was clicked
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating account...';
+
+    try {
+      const { data, error } = await signUp(email, password, username, fullName);
+
+      console.log('signUp response:', { data, error }); // ✅ Check browser console
+
+      if (error) {
+        msgArea.innerHTML = `<div class="error-msg">❌ ${error.message}</div>`;
+        return;
+      }
+
+      // Case 1: Email confirmation required (no session yet)
+      if (data.user && !data.session) {
+        msgArea.innerHTML = `<div class="success-msg">✅ Account created! Please check your email to confirm, then <a href="login.html">log in</a>.</div>`;
+        form.reset();
+        return;
+      }
+
+      // Case 2: No confirmation required — go straight to app
+      if (data.session) {
+        msgArea.innerHTML = `<div class="success-msg">✅ Account created! Redirecting...</div>`;
+        form.reset();
+        setTimeout(() => window.location.href = 'index.html', 1500);
+        return;
+      }
+
+      // Case 3: Unexpected — show raw response
+      msgArea.innerHTML = `<div class="error-msg">⚠️ Unexpected response. Check console.</div>`;
+
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      msgArea.innerHTML = `<div class="error-msg">⚠️ Unexpected error: ${err.message}</div>`;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Account';
+    }
+  });
+</script>
+</body>
+</html>
