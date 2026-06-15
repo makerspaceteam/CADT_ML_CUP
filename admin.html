@@ -9,7 +9,11 @@
 <body>
 
   <nav class="navbar">
-    <div class="logo">CADT<span>ML</span> CUP <span class="year">2026</span> · ADMIN</div>
+    <div class="logo">
+      <a href="index.html">
+        <img src="shared/logo.png" alt="CADT ML Cup 2026" style="height: 70px; width: auto;">
+      </a>
+    </div>
     <div class="nav-links">
       <a href="index.html">Home</a>
       <a href="matches.html">Matches</a>
@@ -19,8 +23,28 @@
         <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
       </div>
     </div>
+  <!-- Hamburger button (mobile only) -->
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
   </nav>
 
+    <!-- Mobile menu (outside nav, below it) -->
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="index.html">Home</a>
+    <a href="matches.html">Matches</a>
+    <a href="leaderboard.html">Leaderboard</a>
+    <a href="admin.html" id="mobile-nav-admin" style="display:none;">Admin</a>
+    <div class="mobile-actions" id="mobile-nav-guest">
+      <a href="login.html" class="btn btn-outline btn-sm">Login</a>
+      <a href="signup.html" class="btn btn-primary btn-sm">Sign Up</a>
+    </div>
+    <div class="mobile-actions" id="mobile-nav-user" style="display:none;">
+      <span class="nav-username" id="mobile-nav-username"></span>
+      <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
+    </div>
+  </div>
+  
   <div class="container" id="admin-content" style="display:none;">
     <div class="section-title">Admin Panel</div>
 
@@ -683,16 +707,27 @@
       await runSync(syncTodayMatches, 'sync-today');
     });
 
+    // Auto-sync toggle
     document.getElementById('auto-sync-toggle').addEventListener('change', (e) => {
       if (e.target.checked) {
-        autoSyncInterval = setInterval(() => runSync(syncTodayMatches, 'sync-today', true), 2 * 60 * 1000);
-        document.getElementById('sync-msg').innerHTML = `<div class="success-msg">Auto-sync enabled (every 2 min).</div>`;
+        startAutoSync();
       } else {
-        clearInterval(autoSyncInterval);
-        autoSyncInterval = null;
+        stopAutoSync();
         document.getElementById('sync-msg').innerHTML = `<div class="success-msg">Auto-sync disabled.</div>`;
       }
     });
+
+    function startAutoSync() {
+      if (autoSyncInterval) return; // already running
+      autoSyncInterval = setInterval(() => runSync(syncTodayMatches, 'sync-today', true), 2 * 60 * 1000);
+      document.getElementById('auto-sync-toggle').checked = true;
+      document.getElementById('sync-msg').innerHTML = `<div class="success-msg">Auto-sync enabled (every 2 min).</div>`;
+    }
+
+    function stopAutoSync() {
+      clearInterval(autoSyncInterval);
+      autoSyncInterval = null;
+    }
 
     async function runSync(syncFn, btnId, silent = false) {
       const msgArea = document.getElementById('sync-msg');
@@ -713,6 +748,17 @@
         if (btn) { btn.disabled = false; btn.textContent = originalText; }
       }
     }
+
+    // ✅ AUTO-START: run on page load + begin 2-min loop
+    (async () => {
+      await runSync(syncTodayMatches, 'sync-today', true); // silent initial sync
+      startAutoSync();
+    })();
+
+    
+    document.getElementById('hamburger').addEventListener('click', () => {
+      document.getElementById('mobile-menu').classList.toggle('open');
+    });
   </script>
 </body>
 </html>

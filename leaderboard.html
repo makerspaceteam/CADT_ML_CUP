@@ -22,6 +22,21 @@
     .leaderboard-table tbody tr { cursor: pointer; transition: background 0.15s; }
     .leaderboard-table tbody tr:hover { background: rgba(255,255,255,0.05); }
 
+    /* Hide less important columns on mobile */
+@media (max-width: 480px) {
+  .leaderboard-table th:nth-child(3),
+  .leaderboard-table td:nth-child(3),
+  .leaderboard-table th:nth-child(4),
+  .leaderboard-table td:nth-child(4) {
+    display: none;
+  }
+  .leaderboard-table th,
+  .leaderboard-table td {
+    padding: 12px 8px;
+    font-size: 0.82rem;
+  }
+}
+
     /* Modal */
     .modal-overlay {
       display: none;
@@ -34,7 +49,7 @@
     }
     .modal-overlay.open { display: flex; }
     .modal-box {
-      background: var(--card-bg);
+      background: linear-gradient(160deg, #0f1b3d 0%, #0a1628 50%, #0d1f3c 100%);
       border: 1px solid var(--border);
       border-radius: 12px;
       width: 100%;
@@ -110,7 +125,11 @@
 <body>
 
   <nav class="navbar">
-    <div class="logo">CADT<span>ML</span> CUP <span class="year">2026</span></div>
+    <div class="logo">
+      <a href="index.html">
+        <img src="shared/logo.png" alt="CADT ML Cup 2026" style="height: 70px; width: auto;">
+      </a>
+    </div>
     <div class="nav-links">
       <a href="index.html">Home</a>
       <a href="matches.html">Matches</a>
@@ -125,7 +144,27 @@
         <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
       </div>
     </div>
+    <!-- Hamburger button (mobile only) -->
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
   </nav>
+
+    <!-- Mobile menu (outside nav, below it) -->
+    <div class="mobile-menu" id="mobile-menu">
+      <a href="index.html">Home</a>
+      <a href="matches.html">Matches</a>
+      <a href="leaderboard.html">Leaderboard</a>
+      <a href="admin.html" id="mobile-nav-admin" style="display:none;">Admin</a>
+      <div class="mobile-actions" id="mobile-nav-guest">
+        <a href="login.html" class="btn btn-outline btn-sm">Login</a>
+        <a href="signup.html" class="btn btn-primary btn-sm">Sign Up</a>
+      </div>
+      <div class="mobile-actions" id="mobile-nav-user" style="display:none;">
+        <span class="nav-username" id="mobile-nav-username"></span>
+        <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
+      </div>
+    </div>
 
   <div class="container">
     <div class="section-title">🏆 Leaderboard</div>
@@ -193,8 +232,11 @@
 
         return `
           <tr class="${isMe ? 'my-rank-row' : ''} ${extraClass}"
-              onclick="openProfile(${row.user_id}, '${row.username}', '${row.full_name || row.username}')"
-              title="View ${row.full_name || row.username}'s predictions">
+              data-userid="${row.user_id}"
+              data-username="${row.username}"
+              data-fullname="${(row.full_name || row.username).replace(/"/g, '&quot;')}"
+              title="View ${row.full_name || row.username}'s predictions"
+              style="cursor:pointer;">
             <td class="rank-cell ${rankClass}">${medal}${isMe ? ' 👤' : ''}</td>
             <td>
               <strong>${row.full_name || row.username}</strong><br>
@@ -247,6 +289,14 @@
     async function openProfile(userId, username, fullName) {
       document.getElementById('profile-modal').classList.add('open');
       document.getElementById('modal-content').innerHTML = `<div class="modal-loading">Loading ${fullName}'s predictions...</div>`;
+      // document.getElementById('leaderboard-container').addEventListener('click', (e) => {
+      //   const row = e.target.closest('tr[data-userid]');
+      //   if (!row) return;
+      //   const userId = row.dataset.userid;
+      //   const username = row.dataset.username;
+      //   const fullName = row.dataset.fullname;
+      //   openProfile(userId, username, fullName);
+      // });
 
       // Fetch predictions with match info
       const { data, error } = await supabaseClient
@@ -397,9 +447,35 @@
       if (e.key === 'Escape') closeModal();
     });
 
+    // Put this ONCE at the bottom, after loadLeaderboard()
+  document.body.addEventListener('click', (e) => {
+    const row = e.target.closest('tr[data-userid]');
+    if (!row) return;
+    const userId = row.dataset.userid;
+    const username = row.dataset.username;
+    const fullName = row.dataset.fullname;
+    openProfile(userId, username, fullName);
+  });
+
+
     loadLeaderboard();
-    setInterval(loadLeaderboard, 30000);
+    //setInterval(loadLeaderboard, 10000);
     updateNavbar();
+    // Real-time — replaces setInterval
+    supabaseClient
+      .channel('leaderboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'predictions' }, () => {
+        loadLeaderboard();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
+        loadLeaderboard();
+      })
+      .subscribe();
+
+    
+    document.getElementById('hamburger').addEventListener('click', () => {
+      document.getElementById('mobile-menu').classList.toggle('open');
+    });
   </script>
 </body>
 </html>

@@ -8,8 +8,12 @@
 </head>
 <body>
 
-  <nav class="navbar">
-    <div class="logo">CADT<span>ML</span> CUP <span class="year">2026</span></div>
+<nav class="navbar">
+  <div class="logo">
+    <a href="index.html">
+      <img src="shared/logo.png" alt="CADT ML Cup 2026" style="height: 70px; width: auto;">
+    </a>
+  </div>
     <div class="nav-links">
       <a href="index.html">Home</a>
       <a href="matches.html">Matches</a>
@@ -24,7 +28,28 @@
         <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
       </div>
     </div>
+
+    <!-- Hamburger button (mobile only) -->
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
   </nav>
+
+    <!-- Mobile menu (outside nav, below it) -->
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="index.html">Home</a>
+    <a href="matches.html">Matches</a>
+    <a href="leaderboard.html">Leaderboard</a>
+    <a href="admin.html" id="mobile-nav-admin" style="display:none;">Admin</a>
+    <div class="mobile-actions" id="mobile-nav-guest">
+      <a href="login.html" class="btn btn-outline btn-sm">Login</a>
+      <a href="signup.html" class="btn btn-primary btn-sm">Sign Up</a>
+    </div>
+    <div class="mobile-actions" id="mobile-nav-user" style="display:none;">
+      <span class="nav-username" id="mobile-nav-username"></span>
+      <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
+    </div>
+  </div>
 
   <section class="hero">
     <h1>CADT<span class="ml">ML</span> CUP <span class="year">2026</span></h1>
@@ -85,6 +110,10 @@
   <script src="shared/auth.js"></script>
   <script>
     updateNavbar();
+
+    document.getElementById('hamburger').addEventListener('click', () => {
+      document.getElementById('mobile-menu').classList.toggle('open');
+    });
   </script>
 </body>
 </html>

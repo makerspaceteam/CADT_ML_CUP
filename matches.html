@@ -203,7 +203,11 @@
 <body>
 
   <nav class="navbar">
-    <div class="logo">CADT<span>ML</span> CUP <span class="year">2026</span></div>
+    <div class="logo">
+      <a href="index.html">
+        <img src="shared/logo.png" alt="CADT ML Cup 2026" style="height: 70px; width: auto;">
+      </a>
+    </div>
     <div class="nav-links">
       <a href="index.html">Home</a>
       <a href="matches.html">Matches</a>
@@ -218,7 +222,27 @@
         <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
       </div>
     </div>
+    <!-- Hamburger button (mobile only) -->
+    <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
   </nav>
+
+    <!-- Mobile menu (outside nav, below it) -->
+    <div class="mobile-menu" id="mobile-menu">
+      <a href="index.html">Home</a>
+      <a href="matches.html">Matches</a>
+      <a href="leaderboard.html">Leaderboard</a>
+      <a href="admin.html" id="mobile-nav-admin" style="display:none;">Admin</a>
+      <div class="mobile-actions" id="mobile-nav-guest">
+        <a href="login.html" class="btn btn-outline btn-sm">Login</a>
+        <a href="signup.html" class="btn btn-primary btn-sm">Sign Up</a>
+      </div>
+      <div class="mobile-actions" id="mobile-nav-user" style="display:none;">
+        <span class="nav-username" id="mobile-nav-username"></span>
+        <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
+      </div>
+    </div>
 
   <div class="container">
     <div class="section-title">Match Schedule</div>
@@ -382,29 +406,47 @@
           predictionSection = `<div class="prediction-existing">Match finished — no prediction submitted.</div>`;
         }
       } else {
-        // Upcoming or live — allow prediction
         const hasExisting = !!existingPred;
-        const btnLabel = hasExisting ? '✏️ Edit Prediction' : '🎯 Predict';
-        const btnClass = hasExisting ? 'predict-toggle-btn submitted' : 'predict-toggle-btn';
+        const isDisabled = isLive; // disable when match is live
 
-        const homeVal   = existingPred?.predicted_home_score ?? '';
-        const awayVal   = existingPred?.predicted_away_score ?? '';
+        const btnLabel = isDisabled
+          ? '🔒 Predictions Closed'
+          : hasExisting ? '✏️ Edit Prediction' : '🎯 Predict';
+
+        const btnClass = isDisabled
+          ? 'predict-toggle-btn disabled'
+          : hasExisting ? 'predict-toggle-btn submitted' : 'predict-toggle-btn';
+
+        const homeVal    = existingPred?.predicted_home_score ?? '';
+        const awayVal    = existingPred?.predicted_away_score ?? '';
         const outcomeVal = existingPred?.predicted_outcome ?? 'home';
 
         predictionSection = `
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
-            <button class="${btnClass}" id="toggle-btn-${m.id}" onclick="togglePredictPanel(${m.id})">${btnLabel}</button>
+            <button class="${btnClass}" id="toggle-btn-${m.id}"
+              ${isDisabled ? 'disabled' : `onclick="togglePredictPanel(${m.id})"`}>
+              ${btnLabel}
+            </button>
             ${hasExisting ? `
               <div class="prediction-existing">
-                Current: <strong>${homeVal} : ${awayVal}</strong>
+                Your prediction: <strong>${homeVal} : ${awayVal}</strong>
                 · <strong>${outcomeVal}</strong>
                 ${existingPred?.confidence_pct != null ? `· <strong>${existingPred.confidence_pct}%</strong> (${confPctToLabel(existingPred.confidence_pct)})` : ''}
               </div>
-            ` : ''}
+            ` : isDisabled ? `<span class="prediction-existing">Match has started — predictions locked.</span>` : ''}
           </div>
 
+          ${!isDisabled ? `
           <div class="prediction-panel" id="predict-panel-${m.id}">
             <div class="predict-form-grid">
+              <div class="form-group">
+                <label>Outcome</label>
+                <select id="pred-outcome-${m.id}">
+                  <option value="home"  ${outcomeVal==='home'  ? 'selected':''}>${m.team_home} Win</option>
+                  <option value="draw"  ${outcomeVal==='draw'  ? 'selected':''}>Draw</option>
+                  <option value="away"  ${outcomeVal==='away'  ? 'selected':''}>${m.team_away} Win</option>
+                </select>
+              </div>
               <div class="form-group">
                 <label>${m.team_home} Score</label>
                 <input type="number" min="0" max="20" id="pred-home-${m.id}"
@@ -414,14 +456,6 @@
                 <label>${m.team_away} Score</label>
                 <input type="number" min="0" max="20" id="pred-away-${m.id}"
                        value="${awayVal}" placeholder="0">
-              </div>
-              <div class="form-group">
-                <label>Outcome</label>
-                <select id="pred-outcome-${m.id}">
-                  <option value="home"  ${outcomeVal==='home'  ? 'selected':''}>🏠 ${m.team_home} Win</option>
-                  <option value="draw"  ${outcomeVal==='draw'  ? 'selected':''}>🤝 Draw</option>
-                  <option value="away"  ${outcomeVal==='away'  ? 'selected':''}>✈️ ${m.team_away} Win</option>
-                </select>
               </div>
               <div class="form-group">
                 <label>Confidence (ML %)</label>
@@ -443,6 +477,7 @@
               <span class="predict-msg" id="pred-msg-${m.id}" style="display:none;"></span>
             </div>
           </div>
+          ` : ''}
         `;
       }
 
@@ -591,6 +626,11 @@
       await loadMatches();
       if (currentUser) await loadMyPredictions();
     }, 30000);
+
+    
+    document.getElementById('hamburger').addEventListener('click', () => {
+      document.getElementById('mobile-menu').classList.toggle('open');
+    });
   </script>
 </body>
 </html>

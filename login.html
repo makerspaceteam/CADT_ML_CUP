@@ -9,7 +9,11 @@
 <body>
 
   <nav class="navbar">
-    <div class="logo">CADT<span>ML</span> CUP <span class="year">2026</span></div>
+    <div class="logo">
+      <a href="index.html">
+        <img src="shared/logo.png" alt="CADT ML Cup 2026" style="height: 70px; width: auto;">
+      </a>
+    </div>
     <div class="nav-links">
       <a href="index.html">Home</a>
       <a href="matches.html">Matches</a>
@@ -69,6 +73,11 @@
       const user = await getCurrentUser();
       if (user) window.location.href = 'matches.html';
     })();
+
+    
+    // document.getElementById('hamburger').addEventListener('click', () => {
+    //   document.getElementById('mobile-menu').classList.toggle('open');
+    // });
   </script>
 </body>
 </html>

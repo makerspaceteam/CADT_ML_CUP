@@ -9,7 +9,11 @@
 <body>
 
   <nav class="navbar">
-    <div class="logo">CADT<span>ML</span> CUP <span class="year">2026</span></div>
+    <div class="logo">
+      <a href="index.html">
+        <img src="shared/logo.png" alt="CADT ML Cup 2026" style="height: 70px; width: auto;">
+      </a>
+    </div>
     <div class="nav-links">
       <a href="index.html">Home</a>
       <a href="matches.html">Matches</a>
@@ -24,21 +28,20 @@
 
       <form id="signup-form">
         <div class="form-group">
-          <label for="full_name">Full Name</label>
-          <input type="text" id="full_name" required placeholder="Sok Dara">
+          <label for="team_name">Team Name <span style="color:red;">*</span></label>
+          <input type="text" id="team_name" required placeholder="e.g. Dragon Predictors">
         </div>
+        
         <div class="form-group">
-          <label for="username">Username</label>
-          <input type="text" id="username" required placeholder="sokdara">
-        </div>
-        <div class="form-group">
-          <label for="email">Email</label>
+          <label for="email">Email <span style="color:red;">*</span></label>
           <input type="email" id="email" required placeholder="you@example.com">
         </div>
+        
         <div class="form-group">
-          <label for="password">Password</label>
+          <label for="password">Password <span style="color:red;">*</span></label>
           <input type="password" id="password" required minlength="6" placeholder="At least 6 characters">
         </div>
+        
         <button type="submit" class="btn btn-primary" style="width:100%;">Create Account</button>
       </form>
 
@@ -57,54 +60,39 @@
   const submitBtn = form.querySelector('button[type="submit"]');
 
   form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    msgArea.innerHTML = '';
+  e.preventDefault();
+  msgArea.innerHTML = '';
 
-    const fullName = document.getElementById('full_name').value.trim();
-    const username = document.getElementById('username').value.trim();
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
+  const teamName = document.getElementById('team_name')?.value.trim() || '';
+  const email = document.getElementById('email')?.value.trim() || '';
+  const password = document.getElementById('password')?.value || '';
 
-    // ✅ Show loading so you know the button was clicked
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Creating account...';
+  if (!teamName) {
+    msgArea.innerHTML = `<div class="error-msg">❌ Team Name is required!</div>`;
+    return;
+  }
 
-    try {
-      const { data, error } = await signUp(email, password, username, fullName);
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Creating account...';
 
-      console.log('signUp response:', { data, error }); // ✅ Check browser console
+  try {
+    const { data, error } = await signUp(email, password, teamName);
 
-      if (error) {
-        msgArea.innerHTML = `<div class="error-msg">❌ ${error.message}</div>`;
-        return;
-      }
-
-      // Case 1: Email confirmation required (no session yet)
-      if (data.user && !data.session) {
-        msgArea.innerHTML = `<div class="success-msg">✅ Account created! Please check your email to confirm, then <a href="login.html">log in</a>.</div>`;
-        form.reset();
-        return;
-      }
-
-      // Case 2: No confirmation required — go straight to app
-      if (data.session) {
-        msgArea.innerHTML = `<div class="success-msg">✅ Account created! Redirecting...</div>`;
-        form.reset();
-        setTimeout(() => window.location.href = 'index.html', 1500);
-        return;
-      }
-
-      // Case 3: Unexpected — show raw response
-      msgArea.innerHTML = `<div class="error-msg">⚠️ Unexpected response. Check console.</div>`;
-
-    } catch (err) {
-      console.error('Unexpected error:', err);
-      msgArea.innerHTML = `<div class="error-msg">⚠️ Unexpected error: ${err.message}</div>`;
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Create Account';
+    if (error) {
+      msgArea.innerHTML = `<div class="error-msg">❌ ${error.message}</div>`;
+      return;
     }
-  });
+
+    msgArea.innerHTML = `<div class="success-msg">✅ Account created! Please check your email.</div>`;
+    form.reset();
+
+  } catch (err) {
+    msgArea.innerHTML = `<div class="error-msg">⚠️ ${err.message}</div>`;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Create Account';
+  }
+});
 </script>
 </body>
 </html>

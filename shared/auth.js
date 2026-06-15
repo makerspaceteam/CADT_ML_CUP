@@ -3,13 +3,44 @@
 // Depends on: supabaseClient (from shared/supabase-client.js)
 // ============================================
 
-async function signUp(email, password, username, fullName) {
-  const { data, error } = await supabaseClient.auth.signUp({
-    email,
-    password,
-    options: { data: { username, full_name: fullName } }
-  });
-  return { data, error };
+async function signUp(email, password, teamName) {
+  try {
+    const displayName = teamName?.trim() || "Team";
+
+    // Main signup
+    const { data, error: authError } = await supabaseClient.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: { 
+          username: displayName 
+        }
+      }
+    });
+
+    if (authError) throw authError;
+
+    // Try to create profile (this may fail silently if RLS blocks it)
+    if (data.user) {
+      const { error: profileError } = await supabaseClient
+        .from('profiles')
+        .insert({
+          id: data.user.id,
+          username: displayName,
+          team_name: teamName?.trim()
+        });
+
+      if (profileError) {
+        console.warn("Profile creation warning:", profileError.message);
+      }
+    }
+
+    return { data, error: null };
+
+  } catch (error) {
+    console.error("SignUp error:", error);
+    return { data: null, error };
+  }
 }
 
 async function signIn(email, password) {
@@ -35,7 +66,7 @@ async function getCurrentProfile() {
   const { data, error } = await supabaseClient   // ✅ supabaseClient not supabase
     .from('profiles')
     .select('*')
-    .eq('auth_id', user.id)
+    .eq('id', user.id)
     .single();
 
   if (error) {
@@ -70,16 +101,36 @@ async function updateNavbar() {
   const usernameEl = document.getElementById('nav-username');
   const adminEl = document.getElementById('nav-admin');
 
+  // Mobile elements
+  const mobileGuestEl = document.getElementById('mobile-nav-guest');
+  const mobileUserEl = document.getElementById('mobile-nav-user');
+  const mobileUsernameEl = document.getElementById('mobile-nav-username');
+  const mobileAdminEl = document.getElementById('mobile-nav-admin');
+
   const profile = await getCurrentProfile();
 
   if (profile) {
+    // Desktop
     if (guestEl) guestEl.style.display = 'none';
     if (userEl) userEl.style.display = 'flex';
-    if (usernameEl) usernameEl.textContent = profile.username;
+    if (usernameEl) usernameEl.textContent = '@' + profile.username;
     if (adminEl) adminEl.style.display = profile.is_admin ? 'inline-block' : 'none';
+
+    // Mobile
+    if (mobileGuestEl) mobileGuestEl.style.display = 'none';
+    if (mobileUserEl) mobileUserEl.style.display = 'flex';
+    if (mobileUsernameEl) mobileUsernameEl.textContent = '@' + profile.username;
+    if (mobileAdminEl) mobileAdminEl.style.display = profile.is_admin ? 'block' : 'none';
+
   } else {
+    // Desktop
     if (guestEl) guestEl.style.display = 'flex';
     if (userEl) userEl.style.display = 'none';
     if (adminEl) adminEl.style.display = 'none';
+
+    // Mobile
+    if (mobileGuestEl) mobileGuestEl.style.display = 'flex';
+    if (mobileUserEl) mobileUserEl.style.display = 'none';
+    if (mobileAdminEl) mobileAdminEl.style.display = 'none';
   }
 }
