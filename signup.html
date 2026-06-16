@@ -26,24 +26,27 @@
       <div class="section-title">Sign Up</div>
       <div id="msg-area"></div>
 
-      <form id="signup-form">
-        <div class="form-group">
-          <label for="team_name">Team Name <span style="color:red;">*</span></label>
-          <input type="text" id="team_name" required placeholder="e.g. Dragon Predictors">
-        </div>
-        
-        <div class="form-group">
-          <label for="email">Email <span style="color:red;">*</span></label>
-          <input type="email" id="email" required placeholder="you@example.com">
-        </div>
-        
-        <div class="form-group">
-          <label for="password">Password <span style="color:red;">*</span></label>
-          <input type="password" id="password" required minlength="6" placeholder="At least 6 characters">
-        </div>
-        
-        <button type="submit" class="btn btn-primary" style="width:100%;">Create Account</button>
-      </form>
+      <div class="form-group">
+        <label for="team_name">Team Name <span style="color:red;">*</span></label>
+        <input type="text" id="team_name" required placeholder="e.g. Dragon Predictors">
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email <span style="color:red;">*</span></label>
+        <input type="email" id="email" required placeholder="example@student.cadt.edu.kh">
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password <span style="color:red;">*</span></label>
+        <input type="password" id="password" required minlength="6" placeholder="At least 6 characters">
+      </div>
+
+      <div class="form-group">
+        <label for="confirm_password">Confirm Password <span style="color:red;">*</span></label>
+        <input type="password" id="confirm_password" required minlength="6" placeholder="Re-enter your password">
+      </div>
+
+      <button id="submit-btn" class="btn btn-primary" style="width:100%;">Create Account</button>
 
       <p style="margin-top: 16px; text-align: center; color: var(--gray);">
         Already have an account? <a href="login.html">Log in</a>
@@ -52,47 +55,73 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="shared/supabase-client.js"></script>
-<script src="shared/auth.js"></script>
-<script>
-  const form = document.getElementById('signup-form');
-  const msgArea = document.getElementById('msg-area');
-  const submitBtn = form.querySelector('button[type="submit"]');
-
-  form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  msgArea.innerHTML = '';
-
-  const teamName = document.getElementById('team_name')?.value.trim() || '';
-  const email = document.getElementById('email')?.value.trim() || '';
-  const password = document.getElementById('password')?.value || '';
-
-  if (!teamName) {
-    msgArea.innerHTML = `<div class="error-msg">❌ Team Name is required!</div>`;
-    return;
-  }
-
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Creating account...';
-
-  try {
-    const { data, error } = await signUp(email, password, teamName);
-
-    if (error) {
-      msgArea.innerHTML = `<div class="error-msg">❌ ${error.message}</div>`;
-      return;
+  <script src="shared/supabase-client.js"></script>
+  <script src="shared/auth.js"></script>
+  <script>
+    // Redirect if already logged in
+    if (getCurrentUser()) {
+      window.location.href = 'matches.html';
     }
 
-    msgArea.innerHTML = `<div class="success-msg">✅ Account created! Please check your email.</div>`;
-    form.reset();
+    const msgArea = document.getElementById('msg-area');
+    const submitBtn = document.getElementById('submit-btn');
 
-  } catch (err) {
-    msgArea.innerHTML = `<div class="error-msg">⚠️ ${err.message}</div>`;
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Create Account';
-  }
-});
-</script>
+    submitBtn.addEventListener('click', async () => {
+      msgArea.innerHTML = '';
+
+      const teamName = document.getElementById('team_name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirm_password').value;
+
+      // Validate team name
+      if (!teamName) {
+        msgArea.innerHTML = `<div class="error-msg">❌ Team Name is required.</div>`;
+        return;
+      }
+
+      // Validate CADT email
+      if (!/^[^\s@]+@student\.cadt\.edu\.kh$/i.test(email)) {
+        msgArea.innerHTML = `<div class="error-msg">❌ Please use your CADT student email (e.g. example@student.cadt.edu.kh)</div>`;
+        return;
+      }
+
+      // Validate password length
+      if (password.length < 6) {
+        msgArea.innerHTML = `<div class="error-msg">❌ Password must be at least 6 characters.</div>`;
+        return;
+      }
+
+      // Validate passwords match
+      if (password !== confirmPassword) {
+        msgArea.innerHTML = `<div class="error-msg">❌ Passwords do not match.</div>`;
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating account...';
+
+      try {
+        const { data, error } = await signUp(email, password, teamName);
+
+        if (error) {
+          msgArea.innerHTML = `<div class="error-msg">❌ ${error.message}</div>`;
+          return;
+        }
+
+        msgArea.innerHTML = `<div class="success-msg">✅ Account created! Redirecting...</div>`;
+
+        setTimeout(() => {
+          window.location.href = 'matches.html';
+        }, 1000);
+
+      } catch (err) {
+        msgArea.innerHTML = `<div class="error-msg">⚠️ ${err.message}</div>`;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Account';
+      }
+    });
+  </script>
 </body>
 </html>

@@ -26,17 +26,15 @@
       <div class="section-title">Log In</div>
       <div id="msg-area"></div>
 
-      <form id="login-form">
-        <div class="form-group">
-          <label for="email">Email</label>
-          <input type="email" id="email" required placeholder="you@example.com">
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input type="password" id="password" required placeholder="Your password">
-        </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;">Log In</button>
-      </form>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" required placeholder="example@student.cadt.edu.kh">
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" required placeholder="Your password">
+      </div>
+      <button id="login-btn" class="btn btn-primary" style="width:100%;">Log In</button>
 
       <p style="margin-top: 16px; text-align: center; color: var(--gray);">
         Don't have an account? <a href="signup.html">Sign up</a>
@@ -48,36 +46,50 @@
   <script src="shared/supabase-client.js"></script>
   <script src="shared/auth.js"></script>
   <script>
-    const form = document.getElementById('login-form');
-    const msgArea = document.getElementById('msg-area');
+    // Redirect if already logged in
+    if (getCurrentUser()) {
+      window.location.href = 'matches.html';
+    }
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
+    const msgArea = document.getElementById('msg-area');
+    const loginBtn = document.getElementById('login-btn');
+
+    loginBtn.addEventListener('click', async () => {
       msgArea.innerHTML = '';
 
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
 
-      const { data, error } = await signIn(email, password);
-
-      if (error) {
-        msgArea.innerHTML = `<div class="error-msg">${error.message}</div>`;
+      if (!email || !password) {
+        msgArea.innerHTML = `<div class="error-msg">❌ Please enter your email and password.</div>`;
         return;
       }
 
-      window.location.href = 'matches.html';
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Logging in...';
+
+      try {
+        const { data, error } = await signIn(email, password);
+
+        if (error) {
+          msgArea.innerHTML = `<div class="error-msg">❌ ${error.message}</div>`;
+          return;
+        }
+
+        window.location.href = 'matches.html';
+
+      } catch (err) {
+        msgArea.innerHTML = `<div class="error-msg">⚠️ ${err.message}</div>`;
+      } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Log In';
+      }
     });
 
-    // Redirect if already logged in
-    (async () => {
-      const user = await getCurrentUser();
-      if (user) window.location.href = 'matches.html';
-    })();
-
-    
-    // document.getElementById('hamburger').addEventListener('click', () => {
-    //   document.getElementById('mobile-menu').classList.toggle('open');
-    // });
+    // Also allow pressing Enter to submit
+    document.getElementById('password').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loginBtn.click();
+    });
   </script>
 </body>
 </html>

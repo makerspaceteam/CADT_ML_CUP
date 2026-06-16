@@ -1,39 +1,44 @@
 // ============================================
 // shared/auth.js
-// Depends on: supabaseClient (from shared/supabase-client.js)
+// No Supabase Auth — uses profiles table directly
 // ============================================
+
+async function hashPassword(password) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 async function signUp(email, password, teamName) {
   try {
     const displayName = teamName?.trim() || "Team";
 
-    // Main signup
-    const { data, error: authError } = await supabaseClient.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        data: { 
-          username: displayName 
-        }
-      }
-    });
+    // Check if email already exists
+    const { data: existing } = await supabaseClient
+      .from('profiles')
+      .select('id')
+      .eq('email', email.trim())
+      .maybeSingle();
 
-    if (authError) throw authError;
-
-    // Try to create profile (this may fail silently if RLS blocks it)
-    if (data.user) {
-      const { error: profileError } = await supabaseClient
-        .from('profiles')
-        .insert({
-          id: data.user.id,
-          username: displayName,
-          team_name: teamName?.trim()
-        });
-
-      if (profileError) {
-        console.warn("Profile creation warning:", profileError.message);
-      }
+    if (existing) {
+      return { data: null, error: { message: 'Email already registered.' } };
     }
+
+    const hashed = await hashPassword(password);
+
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .insert({
+        username: displayName,
+        email: email.trim(),
+        password: hashed
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Save to localStorage so user is "logged in"
+    localStorage.setItem('current_user', JSON.stringify(data));
 
     return { data, error: null };
 
@@ -44,40 +49,67 @@ async function signUp(email, password, teamName) {
 }
 
 async function signIn(email, password) {
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  return { data, error };
+  try {
+    const hashed = await hashPassword(password);
+
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .select('*')
+      .eq('email', email.trim())
+      .eq('password', hashed)
+      .maybeSingle();
+
+    if (error || !data) {
+      return { data: null, error: { message: 'Invalid email or password.' } };
+    }
+
+    // Refresh profile from DB before saving (ensures is_admin is accurate)
+    localStorage.setItem('current_user', JSON.stringify(data));
+
+    return { data, error: null };
+
+  } catch (error) {
+    return { data: null, error };
+  }
 }
 
-async function signOut() {
-  const { error } = await supabaseClient.auth.signOut();
-  if (!error) window.location.href = 'login.html';
-  return { error };
+function signOut() {
+  localStorage.removeItem('current_user');
+  window.location.href = 'login.html';
 }
 
-async function getCurrentUser() {
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  return user;
+function getCurrentUser() {
+  try {
+    const raw = localStorage.getItem('current_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    localStorage.removeItem('current_user');
+    return null;
+  }
 }
 
-async function getCurrentProfile() {
-  const user = await getCurrentUser();
+// Fetches a fresh copy of the profile from DB and updates localStorage
+async function refreshCurrentUser() {
+  const user = getCurrentUser();
   if (!user) return null;
 
-  const { data, error } = await supabaseClient   // ✅ supabaseClient not supabase
+  const { data, error } = await supabaseClient
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single();
 
-  if (error) {
-    console.error('Error fetching profile:', error);
-    return null;
-  }
+  if (error || !data) return user; // fall back to cached
+  localStorage.setItem('current_user', JSON.stringify(data));
   return data;
 }
 
-async function requireAuth() {
-  const user = await getCurrentUser();
+async function getCurrentProfile() {
+  return getCurrentUser();
+}
+
+function requireAuth() {
+  const user = getCurrentUser();
   if (!user) {
     window.location.href = 'login.html';
     return null;
@@ -85,14 +117,17 @@ async function requireAuth() {
   return user;
 }
 
-async function requireAdmin() {
-  const profile = await getCurrentProfile();
-  if (!profile || !profile.is_admin) {
+// ⚠️ IMPORTANT: This checks the localStorage copy of is_admin.
+// Always enforce admin access server-side via Supabase RLS policies.
+// Never rely on this alone for sensitive data writes.
+function requireAdmin() {
+  const user = getCurrentUser();
+  if (!user || !user.is_admin) {
     alert('Access denied: Admins only.');
     window.location.href = 'index.html';
     return null;
   }
-  return profile;
+  return user;
 }
 
 async function updateNavbar() {
@@ -101,34 +136,28 @@ async function updateNavbar() {
   const usernameEl = document.getElementById('nav-username');
   const adminEl = document.getElementById('nav-admin');
 
-  // Mobile elements
   const mobileGuestEl = document.getElementById('mobile-nav-guest');
   const mobileUserEl = document.getElementById('mobile-nav-user');
   const mobileUsernameEl = document.getElementById('mobile-nav-username');
   const mobileAdminEl = document.getElementById('mobile-nav-admin');
 
-  const profile = await getCurrentProfile();
+  const profile = getCurrentUser();
 
   if (profile) {
-    // Desktop
     if (guestEl) guestEl.style.display = 'none';
     if (userEl) userEl.style.display = 'flex';
     if (usernameEl) usernameEl.textContent = '@' + profile.username;
     if (adminEl) adminEl.style.display = profile.is_admin ? 'inline-block' : 'none';
 
-    // Mobile
     if (mobileGuestEl) mobileGuestEl.style.display = 'none';
     if (mobileUserEl) mobileUserEl.style.display = 'flex';
     if (mobileUsernameEl) mobileUsernameEl.textContent = '@' + profile.username;
     if (mobileAdminEl) mobileAdminEl.style.display = profile.is_admin ? 'block' : 'none';
-
   } else {
-    // Desktop
     if (guestEl) guestEl.style.display = 'flex';
     if (userEl) userEl.style.display = 'none';
     if (adminEl) adminEl.style.display = 'none';
 
-    // Mobile
     if (mobileGuestEl) mobileGuestEl.style.display = 'flex';
     if (mobileUserEl) mobileUserEl.style.display = 'none';
     if (mobileAdminEl) mobileAdminEl.style.display = 'none';

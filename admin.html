@@ -18,18 +18,17 @@
       <a href="index.html">Home</a>
       <a href="matches.html">Matches</a>
       <a href="leaderboard.html">Leaderboard</a>
+      <a href="admin.html" id="nav-admin" style="display:none;">Admin</a>
       <div id="nav-user" style="display:none;">
         <span class="nav-username" id="nav-username"></span>
         <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
       </div>
     </div>
-  <!-- Hamburger button (mobile only) -->
     <button class="hamburger" id="hamburger" aria-label="Toggle menu">
       <span></span><span></span><span></span>
     </button>
   </nav>
 
-    <!-- Mobile menu (outside nav, below it) -->
   <div class="mobile-menu" id="mobile-menu">
     <a href="index.html">Home</a>
     <a href="matches.html">Matches</a>
@@ -44,7 +43,7 @@
       <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
     </div>
   </div>
-  
+
   <div class="container" id="admin-content" style="display:none;">
     <div class="section-title">Admin Panel</div>
 
@@ -61,8 +60,7 @@
       <div class="card" style="margin-bottom: 20px;">
         <h3 style="margin-bottom: 12px; color: var(--yellow);" id="match-form-title">Add New Match</h3>
         <div id="match-msg"></div>
-        <form id="match-form">
-          <input type="hidden" id="match-id">
+        <div id="match-form-fields">
           <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px;">
             <div class="form-group">
               <label>Stage</label>
@@ -116,11 +114,11 @@
             <label>Google Form URL</label>
             <input type="url" id="m-form-url" placeholder="https://forms.gle/...">
           </div>
-          <button type="submit" class="btn btn-primary">Save Match</button>
+          <input type="hidden" id="match-id">
+          <button id="match-save-btn" class="btn btn-primary">Save Match</button>
           <button type="button" class="btn btn-outline" id="match-cancel-edit" style="display:none;">Cancel Edit</button>
-        </form>
+        </div>
       </div>
-
       <div id="matches-list"></div>
     </div>
 
@@ -155,7 +153,7 @@
 
     <!-- TAB: ENTER RESULTS -->
     <div class="tab-content" id="tab-results">
-      <p style="color: var(--gray); margin-bottom: 12px;">Select a match, enter the final score and outcome, then save to auto-calculate points for all predictions.</p>
+      <p style="color: var(--gray); margin-bottom: 12px;">Select a match, enter the final score, then save to auto-calculate points for all predictions.</p>
       <div id="results-msg"></div>
       <div class="card">
         <div class="form-group">
@@ -178,7 +176,7 @@
 
     <!-- TAB: MANUAL PREDICTIONS -->
     <div class="tab-content" id="tab-predictions">
-      <p style="color: var(--gray); margin-bottom: 12px;">Manually enter or edit a student's prediction for a match (use this when reading from Google Form responses one by one).</p>
+      <p style="color: var(--gray); margin-bottom: 12px;">Manually enter or edit a student's prediction for a match.</p>
       <div id="pred-msg"></div>
       <div class="card" style="margin-bottom: 20px;">
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px;">
@@ -218,7 +216,6 @@
         </div>
         <button class="btn btn-primary" id="p-save">Save Prediction</button>
       </div>
-
       <div id="predictions-list"></div>
     </div>
 
@@ -227,15 +224,15 @@
       <div class="card">
         <h3 style="color: var(--yellow); margin-bottom: 12px;">Import Predictions from Google Form CSV</h3>
         <p style="color: var(--gray); margin-bottom: 12px;">
-          Export your Google Form responses as CSV (File &gt; Download &gt; CSV in Google Sheets), then upload it here.
-          Your CSV must have these columns (header names, case-insensitive):
+          Export your Google Form responses as CSV, then upload here.
+          Required columns (case-insensitive):
         </p>
         <ul style="color: var(--gray); margin: 0 0 16px 20px; line-height: 1.8;">
           <li><code>email</code> — must match the student's signup email</li>
-          <li><code>match_id</code> — the numeric Match ID (see Matches tab)</li>
+          <li><code>match_id</code> — numeric Match ID (see Matches tab)</li>
           <li><code>predicted_home_score</code></li>
           <li><code>predicted_away_score</code></li>
-          <li><code>predicted_outcome</code> — values: <code>home</code>, <code>away</code>, or <code>draw</code></li>
+          <li><code>predicted_outcome</code> — <code>home</code>, <code>away</code>, or <code>draw</code></li>
           <li><code>confidence</code> — optional: <code>low</code>, <code>medium</code>, <code>high</code></li>
         </ul>
         <div class="form-group">
@@ -264,16 +261,17 @@
     let allUsersCache = [];
 
     // ---------- ACCESS CONTROL ----------
-    (async () => {
-      const profile = await requireAdmin();
-      if (!profile) return;
+    // requireAdmin() is synchronous — no need to await
+    const adminProfile = requireAdmin();
+    if (adminProfile) {
       document.getElementById('admin-loading').style.display = 'none';
       document.getElementById('admin-content').style.display = 'block';
-      await updateNavbar();
-      await Promise.all([loadMatchesTab(), loadUsersCache()]);
-      await populateResultsTab();
-      await populatePredictionsTab();
-    })();
+      updateNavbar();
+      Promise.all([loadMatchesTab(), loadUsersCache()]).then(async () => {
+        await populateResultsTab();
+        await populatePredictionsTab();
+      });
+    }
 
     // ---------- TABS ----------
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -341,7 +339,6 @@
       document.getElementById('m-home-flag').value = m.team_home_flag || '';
       document.getElementById('m-away').value = m.team_away;
       document.getElementById('m-away-flag').value = m.team_away_flag || '';
-      // Convert ISO to local datetime-local format
       const dt = new Date(m.match_date);
       const localISO = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       document.getElementById('m-date').value = localISO;
@@ -353,12 +350,18 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    document.getElementById('match-cancel-edit').addEventListener('click', () => {
-      document.getElementById('match-form').reset();
+    function resetMatchForm() {
+      ['m-stage', 'm-group', 'm-home', 'm-home-flag', 'm-away', 'm-away-flag',
+       'm-date', 'm-status', 'm-venue', 'm-form-url'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = el.tagName === 'SELECT' ? el.options[0].value : '';
+      });
       document.getElementById('match-id').value = '';
       document.getElementById('match-form-title').textContent = 'Add New Match';
       document.getElementById('match-cancel-edit').style.display = 'none';
-    });
+    }
+
+    document.getElementById('match-cancel-edit').addEventListener('click', resetMatchForm);
 
     async function deleteMatch(id) {
       if (!confirm('Delete this match? This will also delete all predictions for it.')) return;
@@ -369,20 +372,28 @@
       await populatePredictionsTab();
     }
 
-    document.getElementById('match-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
+    document.getElementById('match-save-btn').addEventListener('click', async () => {
       const msgArea = document.getElementById('match-msg');
       msgArea.innerHTML = '';
 
       const id = document.getElementById('match-id').value;
+      const homeTeam = document.getElementById('m-home').value.trim();
+      const awayTeam = document.getElementById('m-away').value.trim();
+      const matchDate = document.getElementById('m-date').value;
+
+      if (!homeTeam || !awayTeam || !matchDate) {
+        msgArea.innerHTML = `<div class="error-msg">Home team, away team, and date are required.</div>`;
+        return;
+      }
+
       const payload = {
         stage: document.getElementById('m-stage').value,
         group_name: document.getElementById('m-group').value.trim().toUpperCase() || null,
-        team_home: document.getElementById('m-home').value.trim(),
+        team_home: homeTeam,
         team_home_flag: document.getElementById('m-home-flag').value.trim() || null,
-        team_away: document.getElementById('m-away').value.trim(),
+        team_away: awayTeam,
         team_away_flag: document.getElementById('m-away-flag').value.trim() || null,
-        match_date: new Date(document.getElementById('m-date').value).toISOString(),
+        match_date: new Date(matchDate).toISOString(),
         status: document.getElementById('m-status').value,
         venue: document.getElementById('m-venue').value.trim() || null,
         google_form_url: document.getElementById('m-form-url').value.trim() || null
@@ -400,11 +411,8 @@
         return;
       }
 
-      msgArea.innerHTML = `<div class="success-msg">Match saved!</div>`;
-      document.getElementById('match-form').reset();
-      document.getElementById('match-id').value = '';
-      document.getElementById('match-form-title').textContent = 'Add New Match';
-      document.getElementById('match-cancel-edit').style.display = 'none';
+      msgArea.innerHTML = `<div class="success-msg">✅ Match saved!</div>`;
+      resetMatchForm();
       await loadMatchesTab();
       await populateResultsTab();
       await populatePredictionsTab();
@@ -419,6 +427,7 @@
         `<option value="${m.id}">#${m.id} - ${m.team_home} vs ${m.team_away} (${new Date(m.match_date).toLocaleDateString()})</option>`
       ).join('');
 
+      sel.removeEventListener('change', fillResultFields);
       sel.addEventListener('change', fillResultFields);
       if (allMatchesCache.length > 0) fillResultFields();
     }
@@ -467,7 +476,7 @@
         return;
       }
 
-      msgArea.innerHTML = `<div class="success-msg">Result saved and points calculated for all predictions on this match!</div>`;
+      msgArea.innerHTML = `<div class="success-msg">✅ Result saved and points calculated!</div>`;
       await loadMatchesTab();
       await populateResultsTab();
     });
@@ -530,13 +539,12 @@
         return;
       }
 
-      // Recalculate points if match already has a result
       const m = allMatchesCache.find(x => x.id === matchId);
       if (m && m.actual_home_score != null) {
         await recalculateMatchPoints(matchId);
       }
 
-      msgArea.innerHTML = `<div class="success-msg">Prediction saved!</div>`;
+      msgArea.innerHTML = `<div class="success-msg">✅ Prediction saved!</div>`;
       await loadPredictionsList();
     });
 
@@ -614,11 +622,6 @@
     async function processCsvRows(rows, msgArea, resultsArea) {
       msgArea.innerHTML = `<div class="loading">Processing ${rows.length} rows...</div>`;
 
-      // Build email -> user_id map
-      const emailMap = {};
-      // Supabase JS doesn't expose auth.users emails to non-service-role clients directly,
-      // so we rely on a 'email' column on profiles if available, else match by username.
-      // Try fetching profiles (assumes profiles table might have email synced, fallback to username match)
       const { data: profiles } = await supabaseClient.from('profiles').select('id, username, email, full_name');
 
       const logs = [];
@@ -634,12 +637,11 @@
         const matchId = parseInt(normalized.match_id);
 
         if (!identifier || !matchId) {
-          logs.push(`<tr><td colspan="2" class="error-msg">Skipped row: missing email/username or match_id</td></tr>`);
+          logs.push(`<tr><td colspan="2" class="error-msg">Skipped: missing email/username or match_id</td></tr>`);
           errorCount++;
           continue;
         }
 
-        // Match by email first (most reliable for Google Form), fall back to username
         const usernameGuess = identifier.includes('@') ? identifier.split('@')[0] : identifier;
         const user = profiles.find(p =>
           (p.email && p.email.toLowerCase() === identifier.toLowerCase()) ||
@@ -671,7 +673,7 @@
           logs.push(`<tr><td>${user.username} (#${matchId})</td><td class="error-msg">${error.message}</td></tr>`);
           errorCount++;
         } else {
-          logs.push(`<tr><td>${user.username} (#${matchId})</td><td class="success-msg">Imported</td></tr>`);
+          logs.push(`<tr><td>${user.username} (#${matchId})</td><td class="success-msg">✅ Imported</td></tr>`);
           successCount++;
         }
       }
@@ -684,7 +686,6 @@
         </table>
       `;
 
-      // Recalculate points for any matches that already have results
       const matchIds = [...new Set(rows.map(r => parseInt(r.match_id || r.Match_ID || r.MATCH_ID)).filter(Boolean))];
       for (const mid of matchIds) {
         const m = allMatchesCache.find(x => x.id === mid);
@@ -694,8 +695,9 @@
       }
       await loadPredictionsList();
     }
+
     // ============================================
-    // API SYNC (TheSportsDB)
+    // TAB 5: API SYNC (TheSportsDB)
     // ============================================
     let autoSyncInterval = null;
 
@@ -707,7 +709,6 @@
       await runSync(syncTodayMatches, 'sync-today');
     });
 
-    // Auto-sync toggle
     document.getElementById('auto-sync-toggle').addEventListener('change', (e) => {
       if (e.target.checked) {
         startAutoSync();
@@ -718,7 +719,7 @@
     });
 
     function startAutoSync() {
-      if (autoSyncInterval) return; // already running
+      if (autoSyncInterval) return;
       autoSyncInterval = setInterval(() => runSync(syncTodayMatches, 'sync-today', true), 2 * 60 * 1000);
       document.getElementById('auto-sync-toggle').checked = true;
       document.getElementById('sync-msg').innerHTML = `<div class="success-msg">Auto-sync enabled (every 2 min).</div>`;
@@ -749,13 +750,13 @@
       }
     }
 
-    // ✅ AUTO-START: run on page load + begin 2-min loop
+    // Silent initial sync + start auto-sync loop
     (async () => {
-      await runSync(syncTodayMatches, 'sync-today', true); // silent initial sync
+      await runSync(syncTodayMatches, 'sync-today', true);
       startAutoSync();
     })();
 
-    
+    // Hamburger menu
     document.getElementById('hamburger').addEventListener('click', () => {
       document.getElementById('mobile-menu').classList.toggle('open');
     });

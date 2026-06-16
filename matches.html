@@ -222,27 +222,25 @@
         <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
       </div>
     </div>
-    <!-- Hamburger button (mobile only) -->
     <button class="hamburger" id="hamburger" aria-label="Toggle menu">
       <span></span><span></span><span></span>
     </button>
   </nav>
 
-    <!-- Mobile menu (outside nav, below it) -->
-    <div class="mobile-menu" id="mobile-menu">
-      <a href="index.html">Home</a>
-      <a href="matches.html">Matches</a>
-      <a href="leaderboard.html">Leaderboard</a>
-      <a href="admin.html" id="mobile-nav-admin" style="display:none;">Admin</a>
-      <div class="mobile-actions" id="mobile-nav-guest">
-        <a href="login.html" class="btn btn-outline btn-sm">Login</a>
-        <a href="signup.html" class="btn btn-primary btn-sm">Sign Up</a>
-      </div>
-      <div class="mobile-actions" id="mobile-nav-user" style="display:none;">
-        <span class="nav-username" id="mobile-nav-username"></span>
-        <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
-      </div>
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="index.html">Home</a>
+    <a href="matches.html">Matches</a>
+    <a href="leaderboard.html">Leaderboard</a>
+    <a href="admin.html" id="mobile-nav-admin" style="display:none;">Admin</a>
+    <div class="mobile-actions" id="mobile-nav-guest">
+      <a href="login.html" class="btn btn-outline btn-sm">Login</a>
+      <a href="signup.html" class="btn btn-primary btn-sm">Sign Up</a>
     </div>
+    <div class="mobile-actions" id="mobile-nav-user" style="display:none;">
+      <span class="nav-username" id="mobile-nav-username"></span>
+      <a href="#" onclick="signOut()" class="btn btn-outline btn-sm">Log Out</a>
+    </div>
+  </div>
 
   <div class="container">
     <div class="section-title">Match Schedule</div>
@@ -282,7 +280,6 @@
     let currentStatusFilter = 'all';
     let currentStageFilter = 'all';
     let currentUser = null;
-    // Map of match_id -> existing prediction for the current user
     let myPredictions = {};
 
     const STAGE_LABELS = {
@@ -295,9 +292,8 @@
     };
 
     async function init() {
-      // Get current session
-      const { data: { session } } = await supabaseClient.auth.getSession();
-      currentUser = session?.user ?? null;
+      // Use custom localStorage auth (not Supabase Auth)
+      currentUser = getCurrentUser();
 
       await Promise.all([
         loadMatches(),
@@ -364,11 +360,9 @@
     }
 
     function buildMatchCard(m) {
-      const isLive = m.status === 'live';
+      const isLive     = m.status === 'live';
       const isFinished = m.status === 'finished';
-      const isUpcoming = m.status === 'upcoming';
 
-      // Score or VS
       let scoreDisplay = '';
       if (isFinished || isLive) {
         scoreDisplay = `<div class="score-box">${m.actual_home_score ?? '-'} : ${m.actual_away_score ?? '-'}</div>`;
@@ -380,19 +374,16 @@
         ? `Group ${m.group_name}`
         : (STAGE_LABELS[m.stage] || m.stage);
 
-      // Prediction button & panel
       const existingPred = myPredictions[m.id];
       let predictionSection = '';
 
       if (!currentUser) {
-        // Not logged in — show nudge
         predictionSection = `
           <div class="predict-login-nudge">
             <a href="login.html">Log in</a> or <a href="signup.html">sign up</a> to submit your prediction.
           </div>
         `;
       } else if (isFinished) {
-        // Match over — show their prediction if they made one, or nothing
         if (existingPred) {
           predictionSection = `
             <div class="prediction-existing">
@@ -407,7 +398,7 @@
         }
       } else {
         const hasExisting = !!existingPred;
-        const isDisabled = isLive; // disable when match is live
+        const isDisabled  = isLive;
 
         const btnLabel = isDisabled
           ? '🔒 Predictions Closed'
@@ -442,9 +433,9 @@
               <div class="form-group">
                 <label>Outcome</label>
                 <select id="pred-outcome-${m.id}">
-                  <option value="home"  ${outcomeVal==='home'  ? 'selected':''}>${m.team_home} Win</option>
-                  <option value="draw"  ${outcomeVal==='draw'  ? 'selected':''}>Draw</option>
-                  <option value="away"  ${outcomeVal==='away'  ? 'selected':''}>${m.team_away} Win</option>
+                  <option value="home" ${outcomeVal==='home' ? 'selected':''}>${m.team_home} Win</option>
+                  <option value="draw" ${outcomeVal==='draw' ? 'selected':''}>Draw</option>
+                  <option value="away" ${outcomeVal==='away' ? 'selected':''}>${m.team_away} Win</option>
                 </select>
               </div>
               <div class="form-group">
@@ -466,7 +457,10 @@
                          oninput="updateConfBadge(${m.id}, this.value)">
                   <span class="conf-pct-symbol">%</span>
                 </div>
-                <span class="conf-badge ${existingPred?.confidence_pct != null ? confPctToLabel(existingPred.confidence_pct).toLowerCase() : 'none'}" id="conf-badge-${m.id}">${existingPred?.confidence_pct != null ? confPctToLabel(existingPred.confidence_pct) : '—'}</span>
+                <span class="conf-badge ${existingPred?.confidence_pct != null ? confPctToLabel(existingPred.confidence_pct).toLowerCase() : 'none'}"
+                      id="conf-badge-${m.id}">
+                  ${existingPred?.confidence_pct != null ? confPctToLabel(existingPred.confidence_pct) : '—'}
+                </span>
               </div>
             </div>
             <div class="predict-actions">
@@ -512,8 +506,8 @@
     }
 
     async function submitPrediction(matchId, teamHome, teamAway) {
-      const msgEl  = document.getElementById(`pred-msg-${matchId}`);
-      const btn    = document.getElementById(`pred-submit-${matchId}`);
+      const msgEl      = document.getElementById(`pred-msg-${matchId}`);
+      const btn        = document.getElementById(`pred-submit-${matchId}`);
       const homeScore  = document.getElementById(`pred-home-${matchId}`).value;
       const awayScore  = document.getElementById(`pred-away-${matchId}`).value;
       const outcome    = document.getElementById(`pred-outcome-${matchId}`).value;
@@ -566,16 +560,14 @@
       }
     }
 
-    // Map 0-100% → low / medium / high
     function confPctToLabel(pct) {
       if (pct == null || pct === '') return '—';
       const n = parseInt(pct);
-      if (n < 40)  return 'Low';
-      if (n < 70)  return 'Medium';
+      if (n < 40) return 'Low';
+      if (n < 70) return 'Medium';
       return 'High';
     }
 
-    // Live-update the badge as user types
     function updateConfBadge(matchId, val) {
       const badge = document.getElementById(`conf-badge-${matchId}`);
       if (!badge) return;
@@ -587,8 +579,7 @@
       const n = parseInt(val);
       if (isNaN(n)) return;
       const label = confPctToLabel(n);
-      const cls   = label.toLowerCase();
-      badge.className = `conf-badge ${cls}`;
+      badge.className = `conf-badge ${label.toLowerCase()}`;
       badge.textContent = label;
     }
 
@@ -601,7 +592,7 @@
       }
     }
 
-    // Filter button handlers
+    // Filter buttons
     document.querySelectorAll('#status-filter .filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('#status-filter .filter-btn').forEach(b => b.classList.remove('active'));
@@ -620,17 +611,17 @@
       });
     });
 
-    // Auto-refresh every 30s
+    // Hamburger menu
+    document.getElementById('hamburger').addEventListener('click', () => {
+      document.getElementById('mobile-menu').classList.toggle('open');
+    });
+
+    // Init + auto-refresh every 30s
     init();
     setInterval(async () => {
       await loadMatches();
       if (currentUser) await loadMyPredictions();
     }, 30000);
-
-    
-    document.getElementById('hamburger').addEventListener('click', () => {
-      document.getElementById('mobile-menu').classList.toggle('open');
-    });
   </script>
 </body>
 </html>
