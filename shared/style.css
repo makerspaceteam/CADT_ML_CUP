@@ -2,12 +2,19 @@
    CADTML CUP 2026 - SHARED STYLES
    ============================================ */
 
+@font-face {
+  font-family: 'MyFont';
+  src: url('../fonts/CADTMonoDisplay-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 :root {
   --navy: #0b1530;
   --navy-light: #14213f;
   --navy-card: #101c3e;
-  --yellow: #ffd200;
-  --green: #8bc53f;
+  --yellow: #FAC101;
+  --green: #02ad94;
   --red: #c0392b;
   --white: #ffffff;
   --gray: #9aa5c1;
@@ -21,7 +28,7 @@
 }
 
 body {
-  font-family: 'Segoe UI', Arial, sans-serif;
+  font-family: 'Courier New', Courier, monospace;
   background: var(--navy);
   color: var(--white);
   min-height: 100vh;
@@ -45,7 +52,7 @@ a:hover { text-decoration: underline; }
 
 .logo {
   display: flex;
-  padding-left: 50px;
+  padding-left: 20px;
   align-items: center;
 }
 
@@ -103,6 +110,7 @@ a:hover { text-decoration: underline; }
   font-size: 3.2rem;
   font-weight: 900;
   letter-spacing: 2px;
+  font-family: 'MyFont', monospace;
 }
 
 .hero h1 .ml { color: var(--yellow); }
@@ -122,6 +130,14 @@ a:hover { text-decoration: underline; }
   font-weight: 700;
   letter-spacing: 1px;
   border-radius: 4px;
+}
+
+.hero-buttons {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;      /* wraps to next line on small screens */
+  gap: 12px;            /* gap between buttons */
+  justify-content: center;
 }
 
 /* ---------- BUTTONS ---------- */
@@ -484,6 +500,8 @@ a:hover { text-decoration: underline; }
 .mobile-menu a:last-child { border-bottom: none; }
 .mobile-menu .mobile-actions {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
   padding-top: 12px;
 }
@@ -491,4 +509,5 @@ a:hover { text-decoration: underline; }
   .hamburger { display: flex; }
   .nav-links { display: none !important; }
   .mobile-menu.open { display: flex; }
+  .btn-outline {border: 0px solid;}
 }
