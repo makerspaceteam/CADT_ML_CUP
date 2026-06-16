@@ -45,7 +45,7 @@
   </div>
 
   <div class="container" id="admin-content" style="display:none;">
-    <div class="section-title">Admin Panel</div>
+    <div class="section-title" id="admin-title">Admin Panel</div>
 
     <div class="tabs">
       <button class="tab-btn active" data-tab="matches">Matches</button>
@@ -266,6 +266,7 @@
     if (adminProfile) {
       document.getElementById('admin-loading').style.display = 'none';
       document.getElementById('admin-content').style.display = 'block';
+      document.getElementById('admin-title').textContent = `Admin Panel — ${adminProfile.full_name}`;
       updateNavbar();
       Promise.all([loadMatchesTab(), loadUsersCache()]).then(async () => {
         await populateResultsTab();
