@@ -362,6 +362,9 @@
     function buildMatchCard(m) {
       const isLive     = m.status === 'live';
       const isFinished = m.status === 'finished';
+      // Time-based lock: kicks in automatically once kickoff passes,
+      // even if an admin forgets to flip status to 'live'/'finished'.
+      const matchStarted = new Date(m.match_date).getTime() <= Date.now();
 
       let scoreDisplay = '';
       if (isFinished || isLive) {
@@ -398,81 +401,74 @@
         }
       } else {
         const hasExisting = !!existingPred;
-        const isDisabled  = isLive;
+        // Lock if admin marked it live OR kickoff time has already passed,
+        // whichever comes first.
+        const isDisabled  = isLive || matchStarted;
 
-        const btnLabel = isDisabled
-          ? '🔒 Predictions Closed'
-          : hasExisting ? '✏️ Edit Prediction' : '🎯 Predict';
-
-        const btnClass = isDisabled
-          ? 'predict-toggle-btn disabled'
-          : hasExisting ? 'predict-toggle-btn submitted' : 'predict-toggle-btn';
-
-        const homeVal    = existingPred?.predicted_home_score ?? '';
-        const awayVal    = existingPred?.predicted_away_score ?? '';
-        const outcomeVal = existingPred?.predicted_outcome ?? 'home';
-
-        predictionSection = `
-          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
-            <button class="${btnClass}" id="toggle-btn-${m.id}"
-              ${isDisabled ? 'disabled' : `onclick="togglePredictPanel(${m.id})"`}>
-              ${btnLabel}
-            </button>
-            ${hasExisting ? `
-              <div class="prediction-existing">
-                Your prediction: <strong>${homeVal} : ${awayVal}</strong>
-                · <strong>${outcomeVal}</strong>
-                ${existingPred?.confidence_pct != null ? `· <strong>${existingPred.confidence_pct}%</strong> (${confPctToLabel(existingPred.confidence_pct)})` : ''}
-              </div>
-            ` : isDisabled ? `<span class="prediction-existing">Match has started — predictions locked.</span>` : ''}
-          </div>
-
-          ${!isDisabled ? `
-          <div class="prediction-panel" id="predict-panel-${m.id}">
-            <div class="predict-form-grid">
-              <div class="form-group">
-                <label>Outcome</label>
-                <select id="pred-outcome-${m.id}">
-                  <option value="home" ${outcomeVal==='home' ? 'selected':''}>${m.team_home} Win</option>
-                  <option value="draw" ${outcomeVal==='draw' ? 'selected':''}>Draw</option>
-                  <option value="away" ${outcomeVal==='away' ? 'selected':''}>${m.team_away} Win</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>${m.team_home} Score</label>
-                <input type="number" min="0" max="20" id="pred-home-${m.id}"
-                       value="${homeVal}" placeholder="0">
-              </div>
-              <div class="form-group">
-                <label>${m.team_away} Score</label>
-                <input type="number" min="0" max="20" id="pred-away-${m.id}"
-                       value="${awayVal}" placeholder="0">
-              </div>
-              <div class="form-group">
-                <label>Confidence (ML %)</label>
-                <div class="conf-input-wrap">
-                  <input type="number" min="0" max="100" id="pred-conf-${m.id}"
-                         value="${existingPred?.confidence_pct ?? ''}"
-                         placeholder="e.g. 75"
-                         oninput="updateConfBadge(${m.id}, this.value)">
-                  <span class="conf-pct-symbol">%</span>
-                </div>
-                <span class="conf-badge ${existingPred?.confidence_pct != null ? confPctToLabel(existingPred.confidence_pct).toLowerCase() : 'none'}"
-                      id="conf-badge-${m.id}">
-                  ${existingPred?.confidence_pct != null ? confPctToLabel(existingPred.confidence_pct) : '—'}
-                </span>
-              </div>
+        if (hasExisting) {
+          // Already submitted — predictions can never be edited, only viewed.
+          predictionSection = `
+            <div class="prediction-existing" style="padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
+              🔒 Prediction locked: <strong>${existingPred.predicted_home_score} : ${existingPred.predicted_away_score}</strong>
+              · <strong>${existingPred.predicted_outcome}</strong>
+              ${existingPred.confidence_pct != null ? `· <strong>${existingPred.confidence_pct}%</strong> (${confPctToLabel(existingPred.confidence_pct)})` : ''}
             </div>
-            <div class="predict-actions">
-              <button class="predict-submit-btn" id="pred-submit-${m.id}"
-                      onclick="submitPrediction(${m.id}, '${m.team_home}', '${m.team_away}')">
-                Save Prediction
+          `;
+        } else if (isDisabled) {
+          predictionSection = `
+            <div class="prediction-existing" style="padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
+              Match has started — no prediction was submitted in time.
+            </div>
+          `;
+        } else {
+          // No prediction yet, and submissions are still open.
+          predictionSection = `
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
+              <button class="predict-toggle-btn" id="toggle-btn-${m.id}" onclick="togglePredictPanel(${m.id})">
+                🎯 Predict
               </button>
-              <span class="predict-msg" id="pred-msg-${m.id}" style="display:none;"></span>
+              <span class="prediction-existing">One submission only — cannot be edited afterward.</span>
             </div>
-          </div>
-          ` : ''}
-        `;
+
+            <div class="prediction-panel" id="predict-panel-${m.id}">
+              <div class="predict-form-grid">
+                <div class="form-group">
+                  <label>Outcome</label>
+                  <select id="pred-outcome-${m.id}">
+                    <option value="home">${m.team_home} Win</option>
+                    <option value="draw">Draw</option>
+                    <option value="away">${m.team_away} Win</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>${m.team_home} Score</label>
+                  <input type="number" min="0" max="20" id="pred-home-${m.id}" placeholder="0">
+                </div>
+                <div class="form-group">
+                  <label>${m.team_away} Score</label>
+                  <input type="number" min="0" max="20" id="pred-away-${m.id}" placeholder="0">
+                </div>
+                <div class="form-group">
+                  <label>Confidence (ML %)</label>
+                  <div class="conf-input-wrap">
+                    <input type="number" min="0" max="100" id="pred-conf-${m.id}"
+                           placeholder="e.g. 75"
+                           oninput="updateConfBadge(${m.id}, this.value)">
+                    <span class="conf-pct-symbol">%</span>
+                  </div>
+                  <span class="conf-badge none" id="conf-badge-${m.id}">—</span>
+                </div>
+              </div>
+              <div class="predict-actions">
+                <button class="predict-submit-btn" id="pred-submit-${m.id}"
+                        onclick="submitPrediction(${m.id}, '${m.team_home}', '${m.team_away}')">
+                  Submit Prediction
+                </button>
+                <span class="predict-msg" id="pred-msg-${m.id}" style="display:none;"></span>
+              </div>
+            </div>
+          `;
+        }
       }
 
       return `
@@ -538,25 +534,33 @@
         source: 'web'
       };
 
+      // Plain insert, not upsert — predictions are one-time and locked
+      // once submitted. The unique constraint on (user_id, match_id) will
+      // reject a second attempt at the database level even if the UI
+      // is bypassed.
       const { error } = await supabaseClient
         .from('predictions')
-        .upsert(payload, { onConflict: 'user_id,match_id' });
+        .insert(payload);
 
       btn.disabled = false;
-      btn.textContent = 'Save Prediction';
+      btn.textContent = 'Submit Prediction';
 
       if (error) {
-        showPredMsg(msgEl, 'error', error.message);
+        if (error.code === '23505') {
+          showPredMsg(msgEl, 'error', 'You already submitted a prediction for this match.');
+        } else {
+          showPredMsg(msgEl, 'error', error.message);
+        }
         return;
       }
 
       myPredictions[matchId] = { ...payload };
-      showPredMsg(msgEl, 'success', '✅ Prediction saved!');
 
-      const toggleBtn = document.getElementById(`toggle-btn-${matchId}`);
-      if (toggleBtn) {
-        toggleBtn.textContent = '✏️ Edit Prediction';
-        toggleBtn.classList.add('submitted');
+      // Replace the whole card with its locked, read-only state.
+      const m = allMatches.find(x => x.id === matchId);
+      const cardEl = document.getElementById(`match-card-${matchId}`);
+      if (cardEl && m) {
+        cardEl.outerHTML = buildMatchCard(m);
       }
     }
 
