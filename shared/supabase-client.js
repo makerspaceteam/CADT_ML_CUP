@@ -1,10 +1,9 @@
-// ============================================
-// SUPABASE CLIENT CONFIGURATION
-// ============================================
-// Replace these with your actual Supabase project credentials
-// Find them in: Supabase Dashboard > Project Settings > API
+// shared/supabase-client.js
+import CONFIG from './config.js';
 
-const supabaseClient = window.supabase.createClient(
+const supabaseClient = supabase.createClient(
   CONFIG.SUPABASE_URL,
   CONFIG.SUPABASE_ANON_KEY
 );
+
+export { supabaseClient };
