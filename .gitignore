@@ -3,6 +3,3 @@
 
 # SQL schema
 supabase_schema.sql
-
-# config
-config.js
