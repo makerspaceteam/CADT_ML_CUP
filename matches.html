@@ -273,7 +273,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="shared/config.js"></script>
-<script src="shared/supabase-client.js"></script>
+  <script src="shared/supabase-client.js"></script>
   <script src="shared/auth.js"></script>
   <script src="shared/sportsdb.js"></script>
   <script>
@@ -293,7 +293,6 @@
     };
 
     async function init() {
-      // Use custom localStorage auth (not Supabase Auth)
       currentUser = getCurrentUser();
 
       await Promise.all([
@@ -341,12 +340,37 @@
       });
     }
 
+    // ── How long a match is considered "live" before auto-flipping to finished ──
+    // World Cup matches are ~2 h including extra time. Adjust if needed.
+    const MATCH_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+    /**
+     * Derive the effective display status from the database value + current time.
+     *
+     * Rules:
+     *  - If DB says 'finished' or 'live' → trust the DB (admin has confirmed it).
+     *  - If DB says 'upcoming' and kickoff has passed → show as 'live'.
+     *  - If DB says 'upcoming' and kickoff + duration has passed → show as 'finished'.
+     *    (Fallback so cards don't stay "live" forever when admin is slow to update.)
+     */
+    function deriveStatus(m) {
+      if (m.status === 'finished' || m.status === 'live') return m.status;
+
+      const kickoff = new Date(m.match_date).getTime();
+      const now     = Date.now();
+
+      if (now >= kickoff + MATCH_DURATION_MS) return 'finished';
+      if (now >= kickoff)                      return 'live';
+      return 'upcoming';
+    }
+
     function renderMatches() {
       const container = document.getElementById('matches-container');
 
       let filtered = allMatches;
+
       if (currentStatusFilter !== 'all') {
-        filtered = filtered.filter(m => m.status === currentStatusFilter);
+        filtered = filtered.filter(m => deriveStatus(m) === currentStatusFilter);
       }
       if (currentStageFilter !== 'all') {
         filtered = filtered.filter(m => m.stage === currentStageFilter);
@@ -361,11 +385,11 @@
     }
 
     function buildMatchCard(m) {
-      const isLive     = m.status === 'live';
-      const isFinished = m.status === 'finished';
-      // Time-based lock: kicks in automatically once kickoff passes,
-      // even if an admin forgets to flip status to 'live'/'finished'.
-      const matchStarted = new Date(m.match_date).getTime() <= Date.now();
+      // ── Derive display status client-side ──
+      const displayStatus = deriveStatus(m);
+      const isLive        = displayStatus === 'live';
+      const isFinished    = displayStatus === 'finished';
+      const matchStarted  = displayStatus === 'live' || displayStatus === 'finished';
 
       let scoreDisplay = '';
       if (isFinished || isLive) {
@@ -402,12 +426,9 @@
         }
       } else {
         const hasExisting = !!existingPred;
-        // Lock if admin marked it live OR kickoff time has already passed,
-        // whichever comes first.
-        const isDisabled  = isLive || matchStarted;
+        const isDisabled  = matchStarted; // locked once match started (live or auto-derived)
 
         if (hasExisting) {
-          // Already submitted — predictions can never be edited, only viewed.
           predictionSection = `
             <div class="prediction-existing" style="padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
               🔒 Prediction locked: <strong>${existingPred.predicted_home_score} : ${existingPred.predicted_away_score}</strong>
@@ -422,7 +443,6 @@
             </div>
           `;
         } else {
-          // No prediction yet, and submissions are still open.
           predictionSection = `
             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
               <button class="predict-toggle-btn" id="toggle-btn-${m.id}" onclick="togglePredictPanel(${m.id})">
@@ -477,7 +497,7 @@
           <div class="match-top">
             <div class="match-meta-col">
               <div class="match-meta">
-                <span class="status-pill status-${m.status}">${m.status}</span>
+                <span class="status-pill status-${displayStatus}">${displayStatus}</span>
                 <span>${stageLabel}</span>
                 <span>${formatDate(m.match_date)}</span>
                 ${m.venue ? `<span>📍 ${m.venue}</span>` : ''}
@@ -535,10 +555,6 @@
         source: 'web'
       };
 
-      // Plain insert, not upsert — predictions are one-time and locked
-      // once submitted. The unique constraint on (user_id, match_id) will
-      // reject a second attempt at the database level even if the UI
-      // is bypassed.
       const { error } = await supabaseClient
         .from('predictions')
         .insert(payload);
@@ -557,7 +573,6 @@
 
       myPredictions[matchId] = { ...payload };
 
-      // Replace the whole card with its locked, read-only state.
       const m = allMatches.find(x => x.id === matchId);
       const cardEl = document.getElementById(`match-card-${matchId}`);
       if (cardEl && m) {
