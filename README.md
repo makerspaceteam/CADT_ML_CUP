@@ -126,14 +126,3 @@ This is a static site — no server build step needed. You can host it on:
 - Supabase Storage (as a static bucket, with some config)
 
 Just make sure `shared/supabase-client.js` has your real credentials before deploying.
-
-## 🔐 Security Notes
-
-- The `anon` key is safe to expose in frontend code — Row Level Security (RLS)
-  policies in `supabase_schema.sql` control what each user can actually do.
-- Only users with `is_admin = true` in `profiles` can add/edit matches, enter
-  results, or manage predictions.
-- To promote a user to admin, run in SQL Editor:
-  ```sql
-  update profiles set is_admin = true where username = 'their_username';
-  ```
