@@ -1,8 +1,12 @@
 # Environment variables
 .env
 
-# SQL schema
-supabase_schema.sql
+# Config with keys
+shared/config.js
+config.js
 
-# Config
-shared/config
+# Other
+node_modules/
+dist/
+build/
+*.log
