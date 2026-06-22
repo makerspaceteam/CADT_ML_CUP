@@ -151,7 +151,8 @@ async function resetPassword(email) {
     const { data, error } = await supabaseClient.auth.resetPasswordForEmail(
       email.trim(),
       {
-        redirectTo: window.location.origin + "/login.html"
+        // ✅ window.location.origin + pathname handles both local and GitHub Pages
+        redirectTo: window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/login.html")
       }
     );
 
