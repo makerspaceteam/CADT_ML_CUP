@@ -179,6 +179,7 @@ function getCurrentUser() {
   return raw ? JSON.parse(raw) : null;
 }
 
+async function getCurrentProfile() { return getCurrentUser(); }
 
 // ============================================
 // REFRESH USER
