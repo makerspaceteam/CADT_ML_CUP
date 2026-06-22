@@ -8,89 +8,200 @@
 </head>
 <body>
 
-  <nav class="navbar">
-    <div class="logo">
-      <a href="index.html">
-        <img src="shared/logo.png" alt="CADT ML Cup 2026" style="height: 70px; width: auto;">
-      </a>
-    </div>
-    <div class="nav-links">
-      <a href="index.html">Home</a>
-      <a href="matches.html">Matches</a>
-      <a href="leaderboard.html">Leaderboard</a>
-    </div>
-  </nav>
+<nav class="navbar">
+  <div class="logo">
+    <a href="index.html">
+      <img src="shared/logo.png" alt="CADT ML Cup 2026" style="height: 70px; width: auto;">
+    </a>
+  </div>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="matches.html">Matches</a>
+    <a href="leaderboard.html">Leaderboard</a>
+  </div>
+</nav>
 
-  <div class="container">
-    <div class="auth-box card">
-      <div class="section-title">Log In</div>
-      <div id="msg-area"></div>
+<div class="container">
+  <div class="auth-box card">
+
+    <div class="section-title">Log In</div>
+
+    <div id="msg-area"></div>
+
+    <!-- LOGIN FORM -->
+    <div id="login-box">
 
       <div class="form-group">
         <label for="email">Email</label>
-        <input type="email" id="email" required placeholder="example@student.cadt.edu.kh">
+        <input type="email" id="email" placeholder="example@student.cadt.edu.kh">
       </div>
+
       <div class="form-group">
         <label for="password">Password</label>
-        <input type="password" id="password" required placeholder="Your password">
+        <input type="password" id="password" placeholder="Your password">
       </div>
-      <button id="login-btn" class="btn btn-primary" style="width:100%;">Log In</button>
 
-      <p style="margin-top: 16px; text-align: center; color: var(--gray);">
+      <button id="login-btn" class="btn btn-primary" style="width:100%;">
+        Log In
+      </button>
+
+      <p style="margin-top: 16px; text-align:center;">
         Don't have an account? <a href="signup.html">Sign up</a>
       </p>
+
+      <p style="text-align:center;">
+        <a href="#" id="forgot-password">Forgot password?</a>
+      </p>
+
     </div>
+
+    <!-- RESET PASSWORD FORM -->
+    <div id="reset-box" style="display:none;">
+
+      <div class="form-group">
+        <label>New Password</label>
+        <input type="password" id="new-password" placeholder="Enter new password">
+      </div>
+
+      <button id="reset-btn" class="btn btn-primary" style="width:100%;">
+        Update Password
+      </button>
+
+    </div>
+
   </div>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="shared/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="shared/config.js"></script>
 <script src="shared/supabase-client.js"></script>
-  <script src="shared/auth.js"></script>
-  <script>
-    // Redirect if already logged in
-    if (getCurrentUser()) {
-      window.location.href = 'matches.html';
-    }
+<script src="shared/auth.js"></script>
 
-    const msgArea = document.getElementById('msg-area');
-    const loginBtn = document.getElementById('login-btn');
+<script>
+// =====================================
+// REDIRECT IF LOGGED IN
+// =====================================
+if (getCurrentUser()) {
+  window.location.href = "matches.html";
+}
 
-    loginBtn.addEventListener('click', async () => {
-      msgArea.innerHTML = '';
+// =====================================
+// ELEMENTS
+// =====================================
+const msgArea = document.getElementById("msg-area");
+const loginBtn = document.getElementById("login-btn");
 
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
+// =====================================
+// LOGIN
+// =====================================
+loginBtn.addEventListener("click", async () => {
 
-      if (!email || !password) {
-        msgArea.innerHTML = `<div class="error-msg">❌ Please enter your email and password.</div>`;
-        return;
-      }
+  msgArea.innerHTML = "";
 
-      loginBtn.disabled = true;
-      loginBtn.textContent = 'Logging in...';
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
 
-      try {
-        const { data, error } = await signIn(email, password);
+  if (!email || !password) {
+    msgArea.innerHTML = `<div class="error-msg">❌ Please enter email and password</div>`;
+    return;
+  }
 
-        if (error) {
-          msgArea.innerHTML = `<div class="error-msg">❌ ${error.message}</div>`;
-          return;
-        }
+  loginBtn.disabled = true;
 
-        window.location.href = 'matches.html';
+  const { data, error } = await signIn(email, password);
 
-      } catch (err) {
-        msgArea.innerHTML = `<div class="error-msg">⚠️ ${err.message}</div>`;
-      } finally {
-        loginBtn.disabled = false;
-        loginBtn.textContent = 'Log In';
-      }
-    });
+  loginBtn.disabled = false;
 
-    // Also allow pressing Enter to submit
-    document.getElementById('password').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') loginBtn.click();
-    });
-  </script>
+  if (error) {
+    msgArea.innerHTML = `<div class="error-msg">❌ ${error.message}</div>`;
+    return;
+  }
+
+  window.location.href = "matches.html";
+});
+
+// Enter key login
+document.getElementById("password").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") loginBtn.click();
+});
+
+// =====================================
+// FORGOT PASSWORD
+// =====================================
+document.getElementById("forgot-password").addEventListener("click", async (e) => {
+  e.preventDefault();
+
+  const email = document.getElementById("email").value.trim();
+
+  if (!email) {
+    msgArea.innerHTML = `<div class="error-msg">❌ Enter your email first</div>`;
+    return;
+  }
+
+  const { error } = await resetPassword(email);
+
+  if (error) {
+    msgArea.innerHTML = `<div class="error-msg">❌ ${error.message}</div>`;
+    return;
+  }
+
+  msgArea.innerHTML = `<div class="success-msg">✅ Reset email sent</div>`;
+});
+
+// =====================================
+// RESET MODE DETECTION (IMPORTANT FIX)
+// Supabase sends: #type=recovery
+// =====================================
+function isResetMode() {
+  return window.location.hash.includes("type=recovery");
+}
+
+function showResetUI() {
+
+  document.querySelector(".section-title").innerText = "Reset Password";
+
+  document.getElementById("login-box").style.display = "none";
+  document.getElementById("reset-box").style.display = "block";
+
+  msgArea.innerHTML = `<div class="success-msg">🔐 Enter new password</div>`;
+}
+
+// =====================================
+// UPDATE PASSWORD
+// =====================================
+document.getElementById("reset-btn").addEventListener("click", async () => {
+
+  const newPassword = document.getElementById("new-password").value;
+
+  if (!newPassword || newPassword.length < 6) {
+    msgArea.innerHTML = `<div class="error-msg">❌ Password too short</div>`;
+    return;
+  }
+
+  const { error } = await supabaseClient.auth.updateUser({
+    password: newPassword
+  });
+
+  if (error) {
+    msgArea.innerHTML = `<div class="error-msg">❌ ${error.message}</div>`;
+    return;
+  }
+
+  msgArea.innerHTML = `<div class="success-msg">✅ Password updated</div>`;
+
+  setTimeout(() => {
+    window.location.href = "login.html";
+  }, 1200);
+});
+
+// =====================================
+// INIT
+// =====================================
+if (isResetMode()) {
+  showResetUI();
+}
+
+</script>
+
 </body>
 </html>

@@ -1,165 +1,258 @@
 // ============================================
-// shared/auth.js
-// No Supabase Auth — uses profiles table directly
+// shared/auth.js (FINAL FIXED VERSION)
+// Supabase Auth ONLY
 // ============================================
 
-async function hashPassword(password) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+
+// ============================================
+// SIGN UP
+// ============================================
 
 async function signUp(email, password, teamName) {
   try {
-    const displayName = teamName?.trim() || "Team";
+    const username = teamName?.trim();
 
-    // Check if email already exists
-    const { data: existing } = await supabaseClient
-      .from('profiles')
-      .select('id')
-      .eq('email', email.trim())
-      .maybeSingle();
-
-    if (existing) {
-      return { data: null, error: { message: 'Email already registered.' } };
+    if (!username) {
+      return { data: null, error: { message: "Team name is required" } };
     }
 
-    const hashed = await hashPassword(password);
+    // 1. check username exists
+    const { data: existingUsername } = await supabaseClient
+      .from("profiles")
+      .select("username")
+      .eq("username", username)
+      .maybeSingle();
 
-    const { data, error } = await supabaseClient
-      .from('profiles')
-      .insert({
-        username: displayName,
-        email: email.trim(),
-        password: hashed
-      })
-      .select()
-      .single();
+    if (existingUsername) {
+      return {
+        data: null,
+        error: { message: "Team name already taken" }
+      };
+    }
 
-    if (error) throw error;
+    // 2. create auth user
+    const { data, error } = await supabaseClient.auth.signUp({
+      email: email.trim(),
+      password,
+    });
 
-    // Save to localStorage so user is "logged in"
-    localStorage.setItem('current_user', JSON.stringify(data));
+    if (error) return { data: null, error };
 
-    return { data, error: null };
+    const user = data.user;
 
-  } catch (error) {
-    console.error("SignUp error:", error);
-    return { data: null, error };
+    if (!user) {
+      return { data: null, error: { message: "Signup failed" } };
+    }
+
+    // 3. create profile
+    const { data: profile, error: profileError } =
+      await supabaseClient
+        .from("profiles")
+        .upsert(
+          {
+            id: user.id,
+            username,
+            email: email.trim(),
+          },
+          { onConflict: "id" }
+        )
+        .select()
+        .single();
+
+    if (profileError) return { data: null, error: profileError };
+
+    localStorage.setItem("current_user", JSON.stringify(profile));
+
+    return { data: profile, error: null };
+
+  } catch (err) {
+    return { data: null, error: err };
   }
 }
+
+
+// ============================================
+// SIGN IN
+// ============================================
 
 async function signIn(email, password) {
   try {
-    const hashed = await hashPassword(password);
+    const { data, error } =
+      await supabaseClient.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    const { data, error } = await supabaseClient
-      .from('profiles')
-      .select('*')
-      .eq('email', email.trim())
-      .eq('password', hashed)
-      .maybeSingle();
-
-    if (error || !data) {
-      return { data: null, error: { message: 'Invalid email or password.' } };
+    // ⚠️ Supabase returns same error for email/password wrong
+    if (error) {
+      return {
+        data: null,
+        error: {
+          message: "Invalid email or password"
+        }
+      };
     }
 
-    // Refresh profile from DB before saving (ensures is_admin is accurate)
-    localStorage.setItem('current_user', JSON.stringify(data));
+    // fetch profile
+    const { data: profile } = await supabaseClient
+      .from("profiles")
+      .select("*")
+      .eq("id", data.user.id)
+      .single();
 
-    return { data, error: null };
+    if (!profile) {
+      return {
+        data: null,
+        error: {
+          message: "Profile not found. Please contact admin."
+        }
+      };
+    }
 
-  } catch (error) {
-    return { data: null, error };
+    localStorage.setItem("current_user", JSON.stringify(profile));
+
+    return { data: profile, error: null };
+
+  } catch (err) {
+    return {
+      data: null,
+      error: { message: "Login failed" }
+    };
   }
 }
 
-function signOut() {
-  localStorage.removeItem('current_user');
-  window.location.href = 'login.html';
+
+// ============================================
+// SIGN OUT
+// ============================================
+
+async function signOut() {
+  await supabaseClient.auth.signOut();
+  localStorage.removeItem("current_user");
+  window.location.href = "login.html";
 }
+
+async function resetPassword(email) {
+  try {
+    const { data, error } = await supabaseClient.auth.resetPasswordForEmail(
+      email.trim(),
+      {
+        redirectTo: window.location.origin + "/login.html"
+      }
+    );
+
+    if (error) {
+      return { data: null, error };
+    }
+
+    return {
+      data,
+      error: null
+    };
+
+  } catch (err) {
+    return {
+      data: null,
+      error: { message: "Failed to send reset email" }
+    };
+  }
+}
+
+
+// ============================================
+// CURRENT USER
+// ============================================
 
 function getCurrentUser() {
-  try {
-    const raw = localStorage.getItem('current_user');
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    localStorage.removeItem('current_user');
-    return null;
-  }
-}
-
-// Fetches a fresh copy of the profile from DB and updates localStorage
-async function refreshCurrentUser() {
-  const user = getCurrentUser();
-  if (!user) return null;
-
-  const { data, error } = await supabaseClient
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
-
-  if (error || !data) return user; // fall back to cached
-  localStorage.setItem('current_user', JSON.stringify(data));
-  return data;
+  const raw = localStorage.getItem("current_user");
+  return raw ? JSON.parse(raw) : null;
 }
 
 async function getCurrentProfile() {
   return getCurrentUser();
 }
 
+
+// ============================================
+// REFRESH USER (FIXED)
+// ============================================
+
+async function refreshCurrentUser() {
+  const { data: userData } = await supabaseClient.auth.getUser();
+
+  if (!userData?.user) return null;
+
+  const { data } = await supabaseClient
+    .from("profiles")
+    .select("*")
+    .eq("id", userData.user.id)
+    .single();
+
+  if (!data) return null;
+
+  localStorage.setItem("current_user", JSON.stringify(data));
+  return data;
+}
+
+
+// ============================================
+// AUTH GUARDS
+// ============================================
+
 function requireAuth() {
   const user = getCurrentUser();
   if (!user) {
-    window.location.href = 'login.html';
+    window.location.href = "login.html";
     return null;
   }
   return user;
 }
 
-// ⚠️ IMPORTANT: This checks the localStorage copy of is_admin.
-// Always enforce admin access server-side via Supabase RLS policies.
-// Never rely on this alone for sensitive data writes.
 function requireAdmin() {
   const user = getCurrentUser();
   if (!user || !user.is_admin) {
-    alert('Access denied: Admins only.');
-    window.location.href = 'index.html';
+    alert("Access denied: Admins only");
+    window.location.href = "index.html";
     return null;
   }
   return user;
 }
 
-async function updateNavbar() {
-  const guestEl = document.getElementById('nav-guest');
-  const userEl = document.getElementById('nav-user');
-  const usernameEl = document.getElementById('nav-username');
-  const adminEl = document.getElementById('nav-admin');
 
-  const mobileGuestEl = document.getElementById('mobile-nav-guest');
-  const mobileUserEl = document.getElementById('mobile-nav-user');
-  const mobileUsernameEl = document.getElementById('mobile-nav-username');
-  const mobileAdminEl = document.getElementById('mobile-nav-admin');
+// ============================================
+// NAVBAR
+// ============================================
+
+async function updateNavbar() {
+  const guestEl = document.getElementById("nav-guest");
+  const userEl = document.getElementById("nav-user");
+  const usernameEl = document.getElementById("nav-username");
+  const adminEl = document.getElementById("nav-admin");
+
+  const mobileGuestEl = document.getElementById("mobile-nav-guest");
+  const mobileUserEl = document.getElementById("mobile-nav-user");
+  const mobileUsernameEl = document.getElementById("mobile-nav-username");
+  const mobileAdminEl = document.getElementById("mobile-nav-admin");
 
   const profile = getCurrentUser();
 
   if (profile) {
-    if (guestEl) guestEl.style.display = 'none';
-    if (userEl) userEl.style.display = 'flex';
-    if (usernameEl) usernameEl.textContent = '@' + profile.username;
-    if (adminEl) adminEl.style.display = profile.is_admin ? 'inline-block' : 'none';
+    if (guestEl) guestEl.style.display = "none";
+    if (userEl) userEl.style.display = "flex";
+    if (usernameEl) usernameEl.textContent = "@" + profile.username;
+    if (adminEl) adminEl.style.display = profile.is_admin ? "inline-block" : "none";
 
-    if (mobileGuestEl) mobileGuestEl.style.display = 'none';
-    if (mobileUserEl) mobileUserEl.style.display = 'flex';
-    if (mobileUsernameEl) mobileUsernameEl.textContent = '@' + profile.username;
-    if (mobileAdminEl) mobileAdminEl.style.display = profile.is_admin ? 'block' : 'none';
+    if (mobileGuestEl) mobileGuestEl.style.display = "none";
+    if (mobileUserEl) mobileUserEl.style.display = "flex";
+    if (mobileUsernameEl) mobileUsernameEl.textContent = "@" + profile.username;
+    if (mobileAdminEl) mobileAdminEl.style.display = profile.is_admin ? "block" : "none";
   } else {
-    if (guestEl) guestEl.style.display = 'flex';
-    if (userEl) userEl.style.display = 'none';
-    if (adminEl) adminEl.style.display = 'none';
+    if (guestEl) guestEl.style.display = "flex";
+    if (userEl) userEl.style.display = "none";
+    if (adminEl) adminEl.style.display = "none";
 
-    if (mobileGuestEl) mobileGuestEl.style.display = 'flex';
-    if (mobileUserEl) mobileUserEl.style.display = 'none';
-    if (mobileAdminEl) mobileAdminEl.style.display = 'none';
+    if (mobileGuestEl) mobileGuestEl.style.display = "flex";
+    if (mobileUserEl) mobileUserEl.style.display = "none";
+    if (mobileAdminEl) mobileAdminEl.style.display = "none";
   }
 }
