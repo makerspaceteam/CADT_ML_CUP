@@ -7,7 +7,6 @@ fonts/
 # Shared folder
 shared/sportsdb.js
 shared/supabase-client.js
-shared/auth.js
 
 # HTML admin page
 admin.html
