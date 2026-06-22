@@ -16,50 +16,61 @@ async function signUp(email, password, teamName) {
       return { data: null, error: { message: "Team name is required" } };
     }
 
-    // 1. check username exists
-    const { data: existingUsername } = await supabaseClient
+    if (!password || password.length < 6) {
+      return { data: null, error: { message: "Password must be at least 6 characters" } };
+    }
+
+    // 1. Check username not already taken
+    const { data: existing } = await supabaseClient
       .from("profiles")
       .select("username")
       .eq("username", username)
       .maybeSingle();
 
-    if (existingUsername) {
-      return {
-        data: null,
-        error: { message: "Team name already taken" }
-      };
+    if (existing) {
+      return { data: null, error: { message: "Team name already taken" } };
     }
 
-    // 2. create auth user
+    // 2. Create auth user — DB trigger will auto-create profiles row
     const { data, error } = await supabaseClient.auth.signUp({
       email: email.trim(),
       password,
     });
 
-    if (error) return { data: null, error };
-
-    const user = data.user;
-
-    if (!user) {
-      return { data: null, error: { message: "Signup failed" } };
+    if (error) {
+      return { data: null, error };
     }
 
-    // 3. create profile
-    const { data: profile, error: profileError } =
-      await supabaseClient
-        .from("profiles")
-        .upsert(
-          {
-            id: user.id,
-            username,
-            email: email.trim(),
-          },
-          { onConflict: "id" }
-        )
-        .select()
-        .single();
+    let user = data?.user;
 
-    if (profileError) return { data: null, error: profileError };
+    if (!user) {
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      user = sessionData?.session?.user;
+    }
+
+    if (!user) {
+      return {
+        data: null,
+        error: { message: "Signup succeeded but user session not ready. Try login." }
+      };
+    }
+
+    // 3. Update the profile row (created by DB trigger) with username
+    // Trigger already inserted: id + email
+    // We just need to add: username
+    const { data: profile, error: profileError } = await supabaseClient
+      .from("profiles")
+      .update({ username, email: email.trim() })
+      .eq("id", user.id)
+      .select()
+      .single();
+
+    if (profileError) {
+      return {
+        data: null,
+        error: { message: "Account created but profile update failed. Please contact admin." }
+      };
+    }
 
     localStorage.setItem("current_user", JSON.stringify(profile));
 
@@ -77,23 +88,23 @@ async function signUp(email, password, teamName) {
 
 async function signIn(email, password) {
   try {
+    if (!password || password.length < 6) {
+      return { data: null, error: { message: "Password must be at least 6 characters" } };
+    }
+
     const { data, error } =
       await supabaseClient.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
 
-    // ⚠️ Supabase returns same error for email/password wrong
     if (error) {
       return {
         data: null,
-        error: {
-          message: "Invalid email or password"
-        }
+        error: { message: "Invalid email or password" }
       };
     }
 
-    // fetch profile
     const { data: profile } = await supabaseClient
       .from("profiles")
       .select("*")
@@ -103,9 +114,7 @@ async function signIn(email, password) {
     if (!profile) {
       return {
         data: null,
-        error: {
-          message: "Profile not found. Please contact admin."
-        }
+        error: { message: "Profile not found. Please contact admin." }
       };
     }
 
@@ -132,6 +141,11 @@ async function signOut() {
   window.location.href = "login.html";
 }
 
+
+// ============================================
+// RESET PASSWORD
+// ============================================
+
 async function resetPassword(email) {
   try {
     const { data, error } = await supabaseClient.auth.resetPasswordForEmail(
@@ -145,10 +159,7 @@ async function resetPassword(email) {
       return { data: null, error };
     }
 
-    return {
-      data,
-      error: null
-    };
+    return { data, error: null };
 
   } catch (err) {
     return {
@@ -168,13 +179,9 @@ function getCurrentUser() {
   return raw ? JSON.parse(raw) : null;
 }
 
-async function getCurrentProfile() {
-  return getCurrentUser();
-}
-
 
 // ============================================
-// REFRESH USER (FIXED)
+// REFRESH USER
 // ============================================
 
 async function refreshCurrentUser() {
@@ -199,22 +206,33 @@ async function refreshCurrentUser() {
 // AUTH GUARDS
 // ============================================
 
-function requireAuth() {
-  const user = getCurrentUser();
-  if (!user) {
+async function requireAuth() {
+  const { data: userData } = await supabaseClient.auth.getUser();
+
+  if (!userData?.user) {
+    localStorage.removeItem("current_user");
     window.location.href = "login.html";
     return null;
   }
-  return user;
+
+  const local = getCurrentUser();
+  if (!local || local.id !== userData.user.id) {
+    return await refreshCurrentUser();
+  }
+
+  return local;
 }
 
-function requireAdmin() {
-  const user = getCurrentUser();
-  if (!user || !user.is_admin) {
+async function requireAdmin() {
+  const user = await requireAuth();
+  if (!user) return null;
+
+  if (!user.is_admin) {
     alert("Access denied: Admins only");
     window.location.href = "index.html";
     return null;
   }
+
   return user;
 }
 

@@ -120,7 +120,11 @@ loginBtn.addEventListener("click", async () => {
   window.location.href = "matches.html";
 });
 
-// Enter key login
+// ✅ FIX: Enter key works on BOTH email and password fields
+document.getElementById("email").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") loginBtn.click();
+});
+
 document.getElementById("password").addEventListener("keydown", (e) => {
   if (e.key === "Enter") loginBtn.click();
 });
@@ -145,25 +149,17 @@ document.getElementById("forgot-password").addEventListener("click", async (e) =
     return;
   }
 
-  msgArea.innerHTML = `<div class="success-msg">✅ Reset email sent</div>`;
+  msgArea.innerHTML = `<div class="success-msg">✅ Reset email sent. Check your inbox.</div>`;
 });
 
 // =====================================
-// RESET MODE DETECTION (IMPORTANT FIX)
-// Supabase sends: #type=recovery
+// SHOW RESET UI
 // =====================================
-function isResetMode() {
-  return window.location.hash.includes("type=recovery");
-}
-
 function showResetUI() {
-
   document.querySelector(".section-title").innerText = "Reset Password";
-
   document.getElementById("login-box").style.display = "none";
   document.getElementById("reset-box").style.display = "block";
-
-  msgArea.innerHTML = `<div class="success-msg">🔐 Enter new password</div>`;
+  msgArea.innerHTML = `<div class="success-msg">🔐 Enter your new password below</div>`;
 }
 
 // =====================================
@@ -174,7 +170,7 @@ document.getElementById("reset-btn").addEventListener("click", async () => {
   const newPassword = document.getElementById("new-password").value;
 
   if (!newPassword || newPassword.length < 6) {
-    msgArea.innerHTML = `<div class="error-msg">❌ Password too short</div>`;
+    msgArea.innerHTML = `<div class="error-msg">❌ Password must be at least 6 characters</div>`;
     return;
   }
 
@@ -187,7 +183,7 @@ document.getElementById("reset-btn").addEventListener("click", async () => {
     return;
   }
 
-  msgArea.innerHTML = `<div class="success-msg">✅ Password updated</div>`;
+  msgArea.innerHTML = `<div class="success-msg">✅ Password updated! Redirecting...</div>`;
 
   setTimeout(() => {
     window.location.href = "login.html";
@@ -195,11 +191,15 @@ document.getElementById("reset-btn").addEventListener("click", async () => {
 });
 
 // =====================================
-// INIT
+// ✅ FIX: Use onAuthStateChange for PASSWORD_RECOVERY
+// This is the correct Supabase v2 way — avoids race conditions
+// with hash being consumed before your code runs.
 // =====================================
-if (isResetMode()) {
-  showResetUI();
-}
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (event === "PASSWORD_RECOVERY") {
+    showResetUI();
+  }
+});
 
 </script>
 
