@@ -189,19 +189,30 @@
       text-decoration: none;
     }
 
-    /* Score display improvement */
-    .teams-row {
-      display: flex;
+    /* Confirmation Modal */
+    #confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 1000;
+      display: none;
       align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
       justify-content: center;
-      padding: 10px 0;
+    }
+    #confirm-modal {
+      background: #1a1a2e;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 12px;
+      padding: 28px 24px;
+      max-width: 380px;
+      width: 90%;
+      margin: auto;
     }
   </style>
 </head>
 <body>
 
+  <!-- ... (Navbar and other parts remain the same) ... -->
   <nav class="navbar">
     <div class="logo">
       <a href="index.html">
@@ -246,9 +257,9 @@
     <div class="section-title">Match Schedule</div>
 
     <div class="filter-bar" id="status-filter">
-      <button class="filter-btn active" data-status="all">All</button>
+      <button class="filter-btn" data-status="all">All</button>
       <button class="filter-btn" data-status="live">🔴 Live</button>
-      <button class="filter-btn" data-status="upcoming">Upcoming</button>
+      <button class="filter-btn active" data-status="upcoming">Upcoming</button>
       <button class="filter-btn" data-status="finished">Finished</button>
     </div>
 
@@ -260,6 +271,21 @@
       <button class="filter-btn" data-stage="semi">Semi-Finals</button>
       <button class="filter-btn" data-stage="third_place">3rd Place</button>
       <button class="filter-btn" data-stage="final">Final</button>
+    </div>
+
+    <!-- Prediction confirmation modal -->
+    <div id="confirm-overlay">
+      <div id="confirm-modal">
+        <h3 style="margin:0 0 6px; font-size:1rem; color:#fff;">Confirm your prediction</h3>
+        <p style="margin:0 0 16px; font-size:0.8rem; color:#aaa;">You can only submit once — this cannot be changed after submission.</p>
+        
+        <div id="confirm-summary" style="background:rgba(255,255,255,0.05); border-radius:8px; padding:12px 14px; margin-bottom:20px; font-size:0.85rem; line-height:1.8; color:#fff;"></div>
+        
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button onclick="closeConfirm()" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:8px 18px; border-radius:6px; cursor:pointer; font-size:0.85rem;">Cancel</button>
+          <button id="confirm-yes-btn" style="background:#f5c518; color:#111; border:none; padding:8px 20px; border-radius:6px; font-weight:700; font-size:0.85rem; cursor:pointer;">Yes, submit</button>
+        </div>
+      </div>
     </div>
 
     <div id="matches-container" class="match-grid">
@@ -276,12 +302,15 @@
   <script src="shared/supabase-client.js"></script>
   <script src="shared/auth.js"></script>
   <script src="shared/sportsdb.js"></script>
+
   <script>
     let allMatches = [];
-    let currentStatusFilter = 'all';
+    let currentStatusFilter = 'upcoming';
     let currentStageFilter = 'all';
     let currentUser = null;
     let myPredictions = {};
+
+    let pendingPrediction = null; // Store prediction data before confirmation
 
     const STAGE_LABELS = {
       group: 'Group Stage',
@@ -294,12 +323,10 @@
 
     async function init() {
       currentUser = getCurrentUser();
-
       await Promise.all([
         loadMatches(),
         currentUser ? loadMyPredictions() : Promise.resolve()
       ]);
-
       updateNavbar();
     }
 
@@ -340,33 +367,19 @@
       });
     }
 
-    // ── How long a match is considered "live" before auto-flipping to finished ──
-    // World Cup matches are ~2 h including extra time. Adjust if needed.
-    const MATCH_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
+    const MATCH_DURATION_MS = 2 * 60 * 60 * 1000;
 
-    /**
-     * Derive the effective display status from the database value + current time.
-     *
-     * Rules:
-     *  - If DB says 'finished' or 'live' → trust the DB (admin has confirmed it).
-     *  - If DB says 'upcoming' and kickoff has passed → show as 'live'.
-     *  - If DB says 'upcoming' and kickoff + duration has passed → show as 'finished'.
-     *    (Fallback so cards don't stay "live" forever when admin is slow to update.)
-     */
     function deriveStatus(m) {
       if (m.status === 'finished' || m.status === 'live') return m.status;
-
       const kickoff = new Date(m.match_date).getTime();
-      const now     = Date.now();
-
+      const now = Date.now();
       if (now >= kickoff + MATCH_DURATION_MS) return 'finished';
-      if (now >= kickoff)                      return 'live';
+      if (now >= kickoff) return 'live';
       return 'upcoming';
     }
 
     function renderMatches() {
       const container = document.getElementById('matches-container');
-
       let filtered = allMatches;
 
       if (currentStatusFilter !== 'all') {
@@ -385,24 +398,18 @@
     }
 
     function buildMatchCard(m) {
-      // ── Derive display status client-side ──
       const displayStatus = deriveStatus(m);
-      const isLive        = displayStatus === 'live';
-      const isFinished    = displayStatus === 'finished';
-      const matchStarted  = displayStatus === 'live' || displayStatus === 'finished';
+      const isLive = displayStatus === 'live';
+      const isFinished = displayStatus === 'finished';
+      const matchStarted = isLive || isFinished;
 
-      let scoreDisplay = '';
-      if (isFinished || isLive) {
-        scoreDisplay = `<div class="score-box">${m.actual_home_score ?? '-'} : ${m.actual_away_score ?? '-'}</div>`;
-      } else {
-        scoreDisplay = `<div class="vs-label">VS</div>`;
-      }
+      let scoreDisplay = isFinished || isLive 
+        ? `<div class="score-box">${m.actual_home_score ?? '-'} : ${m.actual_away_score ?? '-'}</div>`
+        : `<div class="vs-label">VS</div>`;
 
-      const stageLabel = m.group_name
-        ? `Group ${m.group_name}`
-        : (STAGE_LABELS[m.stage] || m.stage);
-
+      const stageLabel = m.group_name ? `Group ${m.group_name}` : (STAGE_LABELS[m.stage] || m.stage);
       const existingPred = myPredictions[m.id];
+
       let predictionSection = '';
 
       if (!currentUser) {
@@ -426,7 +433,7 @@
         }
       } else {
         const hasExisting = !!existingPred;
-        const isDisabled  = matchStarted; // locked once match started (live or auto-derived)
+        const isDisabled = matchStarted;
 
         if (hasExisting) {
           predictionSection = `
@@ -472,8 +479,7 @@
                 <div class="form-group">
                   <label>Confidence (ML %)</label>
                   <div class="conf-input-wrap">
-                    <input type="number" min="0" max="100" id="pred-conf-${m.id}"
-                           placeholder="e.g. 75"
+                    <input type="number" min="0" max="100" id="pred-conf-${m.id}" placeholder="e.g. 75"
                            oninput="updateConfBadge(${m.id}, this.value)">
                     <span class="conf-pct-symbol">%</span>
                   </div>
@@ -482,7 +488,7 @@
               </div>
               <div class="predict-actions">
                 <button class="predict-submit-btn" id="pred-submit-${m.id}"
-                        onclick="submitPrediction(${m.id}, '${m.team_home}', '${m.team_away}')">
+                        onclick="preparePrediction(${m.id}, '${m.team_home}', '${m.team_away}')">
                   Submit Prediction
                 </button>
                 <span class="predict-msg" id="pred-msg-${m.id}" style="display:none;"></span>
@@ -516,41 +522,83 @@
 
     function togglePredictPanel(matchId) {
       const panel = document.getElementById(`predict-panel-${matchId}`);
-      const btn   = document.getElementById(`toggle-btn-${matchId}`);
+      const btn = document.getElementById(`toggle-btn-${matchId}`);
       const isOpen = panel.classList.contains('visible');
       panel.classList.toggle('visible', !isOpen);
       btn.classList.toggle('open', !isOpen);
     }
 
-    async function submitPrediction(matchId, teamHome, teamAway) {
-      const msgEl      = document.getElementById(`pred-msg-${matchId}`);
-      const btn        = document.getElementById(`pred-submit-${matchId}`);
-      const homeScore  = document.getElementById(`pred-home-${matchId}`).value;
-      const awayScore  = document.getElementById(`pred-away-${matchId}`).value;
-      const outcome    = document.getElementById(`pred-outcome-${matchId}`).value;
-      const confPctRaw = document.getElementById(`pred-conf-${matchId}`).value;
-      const confPct    = confPctRaw !== '' ? parseInt(confPctRaw) : null;
-      const confidence = confPct != null ? confPctToLabel(confPct).toLowerCase() : null;
+    // New function: Prepare data and show confirmation modal
+    function preparePrediction(matchId, teamHome, teamAway) {
+      const homeScore = document.getElementById(`pred-home-${matchId}`).value.trim();
+      const awayScore = document.getElementById(`pred-away-${matchId}`).value.trim();
+      const outcome = document.getElementById(`pred-outcome-${matchId}`).value;
+      const confPctRaw = document.getElementById(`pred-conf-${matchId}`).value.trim();
 
       if (homeScore === '' || awayScore === '') {
-        showPredMsg(msgEl, 'error', 'Enter both scores.');
+        const msgEl = document.getElementById(`pred-msg-${matchId}`);
+        showPredMsg(msgEl, 'error', 'Please enter both scores.');
         return;
       }
+
+      const confPct = confPctRaw !== '' ? parseInt(confPctRaw) : null;
       if (confPct !== null && (confPct < 0 || confPct > 100)) {
-        showPredMsg(msgEl, 'error', 'Confidence must be 0–100%.');
+        const msgEl = document.getElementById(`pred-msg-${matchId}`);
+        showPredMsg(msgEl, 'error', 'Confidence must be between 0 and 100.');
         return;
       }
+
+      // Store pending prediction
+      pendingPrediction = {
+        matchId,
+        teamHome,
+        teamAway,
+        homeScore: parseInt(homeScore),
+        awayScore: parseInt(awayScore),
+        outcome,
+        confPct
+      };
+
+      // Build summary
+      const outcomeText = outcome === 'home' ? `${teamHome} Win` : 
+                         outcome === 'away' ? `${teamAway} Win` : 'Draw';
+
+      document.getElementById('confirm-summary').innerHTML = `
+        <strong>${teamHome} ${homeScore} - ${awayScore} ${teamAway}</strong><br>
+        Predicted Outcome: <strong>${outcomeText}</strong><br>
+        ${confPct !== null ? `Confidence: <strong>${confPct}%</strong> (${confPctToLabel(confPct)})` : ''}
+      `;
+
+      document.getElementById('confirm-overlay').style.display = 'flex';
+      
+      // Set up confirm button
+      const confirmBtn = document.getElementById('confirm-yes-btn');
+      confirmBtn.onclick = () => confirmSubmitPrediction();
+    }
+
+    function closeConfirm() {
+      document.getElementById('confirm-overlay').style.display = 'none';
+      pendingPrediction = null;
+    }
+
+    async function confirmSubmitPrediction() {
+      if (!pendingPrediction) return;
+
+      const { matchId, homeScore, awayScore, outcome, confPct } = pendingPrediction;
+      const msgEl = document.getElementById(`pred-msg-${matchId}`);
+      const btn = document.getElementById(`pred-submit-${matchId}`);
 
       btn.disabled = true;
       btn.textContent = 'Saving…';
+      closeConfirm();
 
       const payload = {
         user_id: currentUser.id,
         match_id: matchId,
-        predicted_home_score: parseInt(homeScore),
-        predicted_away_score: parseInt(awayScore),
+        predicted_home_score: homeScore,
+        predicted_away_score: awayScore,
         predicted_outcome: outcome,
-        confidence: confidence,
+        confidence: confPct != null ? confPctToLabel(confPct).toLowerCase() : null,
         confidence_pct: confPct,
         source: 'web'
       };
@@ -571,17 +619,19 @@
         return;
       }
 
-      myPredictions[matchId] = { ...payload };
+      myPredictions[matchId] = payload;
 
       const m = allMatches.find(x => x.id === matchId);
       const cardEl = document.getElementById(`match-card-${matchId}`);
       if (cardEl && m) {
         cardEl.outerHTML = buildMatchCard(m);
       }
+
+      showPredMsg(msgEl, 'success', 'Prediction submitted successfully!');
     }
 
     function confPctToLabel(pct) {
-      if (pct == null || pct === '') return '—';
+      if (pct == null) return '—';
       const n = parseInt(pct);
       if (n < 40) return 'Low';
       if (n < 70) return 'Medium';
@@ -591,7 +641,7 @@
     function updateConfBadge(matchId, val) {
       const badge = document.getElementById(`conf-badge-${matchId}`);
       if (!badge) return;
-      if (val === '' || val == null) {
+      if (!val) {
         badge.className = 'conf-badge none';
         badge.textContent = '—';
         return;
@@ -631,12 +681,10 @@
       });
     });
 
-    // Hamburger menu
     document.getElementById('hamburger').addEventListener('click', () => {
       document.getElementById('mobile-menu').classList.toggle('open');
     });
 
-    // Init + auto-refresh every 30s
     init();
     setInterval(async () => {
       await loadMatches();
