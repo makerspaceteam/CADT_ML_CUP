@@ -1,4 +1,17 @@
+# Environment variables
 .env
+
+# Fonts
 fonts/
+
+# Shared folder
 shared/
-.admin.html
+
+# HTML admin page
+admin.html
+
+# API file
+sportsdb-api.js
+
+# SQL schema
+supabase_schema.sql
