@@ -263,18 +263,19 @@
 
     // ---------- ACCESS CONTROL ----------
     // requireAdmin() is synchronous — no need to await
-    const adminProfile = requireAdmin();
-    if (adminProfile) {
-      document.getElementById('admin-loading').style.display = 'none';
-      document.getElementById('admin-content').style.display = 'block';
-      document.getElementById('admin-title').textContent = `Admin Panel — ${adminProfile.full_name}`;
-      updateNavbar();
-      Promise.all([loadMatchesTab(), loadUsersCache()]).then(async () => {
-        await populateResultsTab();
-        await populatePredictionsTab();
-      });
-    }
-
+    (async () => {
+      const adminProfile = await requireAdmin();
+      if (adminProfile) {
+        document.getElementById('admin-loading').style.display = 'none';
+        document.getElementById('admin-content').style.display = 'block';
+        document.getElementById('admin-title').textContent = `Admin Panel — ${adminProfile.username}`;
+        updateNavbar();
+        await Promise.all([loadMatchesTab(), loadUsersCache()]).then(async () => {
+          await populateResultsTab();
+          await populatePredictionsTab();
+        });
+      }
+    })();
     // ---------- TABS ----------
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -425,21 +426,32 @@
     // ============================================
     async function populateResultsTab() {
       const sel = document.getElementById('r-match');
-      sel.innerHTML = allMatchesCache.map(m =>
+      
+      // Only show matches without results yet
+      const pendingMatches = allMatchesCache.filter(m => m.actual_home_score == null);
+
+      if (pendingMatches.length === 0) {
+        sel.innerHTML = `<option value="">-- No pending matches --</option>`;
+        document.getElementById('r-home-score').value = '';
+        document.getElementById('r-away-score').value = '';
+        return;
+      }
+
+      sel.innerHTML = pendingMatches.map(m =>
         `<option value="${m.id}">#${m.id} - ${m.team_home} vs ${m.team_away} (${new Date(m.match_date).toLocaleDateString()})</option>`
       ).join('');
 
       sel.removeEventListener('change', fillResultFields);
       sel.addEventListener('change', fillResultFields);
-      if (allMatchesCache.length > 0) fillResultFields();
+      fillResultFields();
     }
 
     function fillResultFields() {
       const id = parseInt(document.getElementById('r-match').value);
       const m = allMatchesCache.find(x => x.id === id);
       if (!m) return;
-      document.getElementById('r-home-score').value = m.actual_home_score ?? '';
-      document.getElementById('r-away-score').value = m.actual_away_score ?? '';
+      document.getElementById('r-home-score').value = '';
+      document.getElementById('r-away-score').value = '';
     }
 
     document.getElementById('r-save').addEventListener('click', async () => {
