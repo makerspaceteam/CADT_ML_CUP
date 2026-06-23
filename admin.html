@@ -426,20 +426,25 @@
     // ============================================
     async function populateResultsTab() {
       const sel = document.getElementById('r-match');
-      
-      // Only show matches without results yet
-      const pendingMatches = allMatchesCache.filter(m => m.actual_home_score == null);
 
-      if (pendingMatches.length === 0) {
-        sel.innerHTML = `<option value="">-- No pending matches --</option>`;
+      if (allMatchesCache.length === 0) {
+        sel.innerHTML = `<option value="">-- No matches available --</option>`;
         document.getElementById('r-home-score').value = '';
         document.getElementById('r-away-score').value = '';
         return;
       }
 
-      sel.innerHTML = pendingMatches.map(m =>
-        `<option value="${m.id}">#${m.id} - ${m.team_home} vs ${m.team_away} (${new Date(m.match_date).toLocaleDateString()})</option>`
+      sel.innerHTML = allMatchesCache.map(m =>
+        `<option value="${m.id}">#${m.id} - ${m.team_home} vs ${m.team_away} (${new Date(m.match_date).toLocaleDateString()}) ${m.actual_home_score != null ? '✅ ' + m.actual_home_score + ':' + m.actual_away_score : '⏳ pending'}</option>`
       ).join('');
+
+      // Auto-select the last finished match
+      const finishedMatches = allMatchesCache.filter(m => m.status === 'finished');
+      const lastFinished = finishedMatches[finishedMatches.length - 1];
+
+      if (lastFinished) {
+        sel.value = lastFinished.id;
+      }
 
       sel.removeEventListener('change', fillResultFields);
       sel.addEventListener('change', fillResultFields);
@@ -450,8 +455,8 @@
       const id = parseInt(document.getElementById('r-match').value);
       const m = allMatchesCache.find(x => x.id === id);
       if (!m) return;
-      document.getElementById('r-home-score').value = '';
-      document.getElementById('r-away-score').value = '';
+      document.getElementById('r-home-score').value = m.actual_home_score ?? '';
+      document.getElementById('r-away-score').value = m.actual_away_score ?? '';
     }
 
     document.getElementById('r-save').addEventListener('click', async () => {
