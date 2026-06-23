@@ -317,12 +317,15 @@
       const exactScore = data.filter(p => p.points_earned >= 8).length;
 
       // Confidence breakdown
-      const confCounts = { high: 0, medium: 0, low: 0, none: 0 };
+      const confCounts  = { high: 0, medium: 0, low: 0, none: 0 };
       const confCorrect = { high: 0, medium: 0, low: 0, none: 0 };
+
       data.forEach(p => {
         const key = p.confidence || 'none';
+        const m = p.matches;
+        if (!m || m.status !== 'finished') return; // skip pending
         confCounts[key]++;
-        if (p.points_earned >= 3) confCorrect[key]++;
+        if (p.predicted_outcome === m.actual_outcome) confCorrect[key]++;
       });
 
       const confBar = (label, key, color) => {
@@ -344,35 +347,45 @@
 
       // Prediction history rows
       const predRows = data.map(p => {
-        const m = p.matches;
-        if (!m) return '';
+      const m = p.matches;
+      if (!m) return '';
 
-        const isPending = m.status !== 'finished';
-        const isCorrect = !isPending && p.predicted_outcome === m.actual_outcome;
-        const outcomeLabel = isPending ? 'Pending' : (isCorrect ? '✓ Correct' : '✗ Wrong');
-        const outcomeClass = isPending ? 'pending' : (isCorrect ? 'correct' : 'wrong');
+      const isPending = m.status !== 'finished';
+      const isCorrect = !isPending && p.predicted_outcome === m.actual_outcome;
+      const outcomeLabel = isPending ? 'Pending' : (isCorrect ? '✓' : '✗');
+      const outcomeClass = isPending ? 'pending' : (isCorrect ? 'correct' : 'wrong');
 
-        const matchDate = new Date(m.match_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        const actualScore = m.status === 'finished'
-          ? `${m.actual_home_score}–${m.actual_away_score}`
-          : '–';
-        const predScore = (p.predicted_home_score != null && p.predicted_away_score != null)
-          ? `${p.predicted_home_score}–${p.predicted_away_score}`
-          : '–';
-        const confClass = p.confidence || 'none';
+      const matchDate = new Date(m.match_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      const actualScore = m.status === 'finished'
+        ? `${m.actual_home_score}–${m.actual_away_score}`
+        : '–';
+      const predScore = (p.predicted_home_score != null && p.predicted_away_score != null)
+        ? `${p.predicted_home_score}–${p.predicted_away_score}`
+        : '–';
+      const confClass = p.confidence || 'none';
 
-        return `
-          <tr>
-            <td>${matchDate}</td>
-            <td>${m.team_home_flag || ''} ${m.team_home} vs ${m.team_away} ${m.team_away_flag || ''}</td>
-            <td>${predScore}</td>
-            <td>${actualScore}</td>
-            <td>${p.confidence ? `<span class="conf-badge ${confClass}">${p.confidence}</span>` : '–'}</td>
-            <td><span class="outcome-pill ${outcomeClass}">${outcomeLabel}</span></td>
-            <td class="points-earned">${isPending ? '–' : (p.points_earned || 0)}</td>
-          </tr>
-        `;
-      }).join('');
+      // Resolve predicted_outcome → team name + flag
+      const pickDisplay = (() => {
+        if (!p.predicted_outcome) return '–';
+        if (p.predicted_outcome === 'home') return `${m.team_home_flag || ''} ${m.team_home}`;
+        if (p.predicted_outcome === 'away') return `${m.team_away_flag || ''} ${m.team_away}`;
+        if (p.predicted_outcome === 'draw') return `Draw`;
+        return p.predicted_outcome;
+      })();
+
+      return `
+        <tr>
+          <td>${matchDate}</td>
+          <td>${m.team_home_flag || ''} ${m.team_home} vs ${m.team_away} ${m.team_away_flag || ''}</td>
+          <td>${predScore}</td>
+          <td>${actualScore}</td>
+          <td>${p.confidence ? `<span class="conf-badge ${confClass}">${p.confidence}</span>` : '–'}</td>
+          <td>${pickDisplay}</td>
+          <td><span class="outcome-pill ${outcomeClass}">${outcomeLabel}</span></td>
+          <td class="points-earned">${isPending ? '–' : (p.points_earned || 0)}</td>
+        </tr>
+      `;
+    }).join('');
 
       document.getElementById('modal-content').innerHTML = `
         <div class="modal-header">
@@ -423,7 +436,8 @@
                     <th>Predicted</th>
                     <th>Actual</th>
                     <th>Confidence</th>
-                    <th>Result</th>
+                    <th>Pick</th>
+                    <th>W/D/L</th>
                     <th>Pts</th>
                   </tr>
                 </thead>

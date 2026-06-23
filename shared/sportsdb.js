@@ -17,9 +17,11 @@ function getOutcome(home, away) {
   return 'draw';
 }
 
+// ✅ FIX 3: return { error } so callers can check for failures
 async function recalculateMatchPoints(matchId) {
   const { error } = await supabaseClient.rpc('calculate_match_points', { p_match_id: matchId });
   if (error) console.error('Failed to recalculate points for match', matchId, error);
+  return { error };
 }
 
 // ---------- FETCH HELPERS ----------
@@ -66,13 +68,25 @@ function mapStage(event) {
   return { stage: 'group', group: groupMatch ? groupMatch[1].toUpperCase() : null };
 }
 
+// ✅ FIX 4: time-based fallback so finished matches don't stay stuck on 'live'
 function mapStatus(event) {
   const status = (event.strStatus || '').toLowerCase();
   const hasScore = event.intHomeScore !== null && event.intHomeScore !== undefined &&
                    event.intAwayScore !== null && event.intAwayScore !== undefined;
 
   if (status.includes('finished') || status === 'match finished' || status === 'ft') return 'finished';
-  if (status.includes('live') || status.includes('in play') || status.includes('1h') || status.includes('2h')) return 'live';
+
+  // If scores exist AND kickoff was 150+ minutes ago, force finished regardless of strStatus
+  if (hasScore && event.dateEvent) {
+    const time = event.strTime || '00:00:00';
+    const kickoff = new Date(`${event.dateEvent}T${time}Z`);
+    const minsAgo = (Date.now() - kickoff.getTime()) / 60000;
+    if (minsAgo > 150) return 'finished';
+  }
+
+  if (status.includes('live') || status.includes('in play') ||
+      status.includes('1h') || status.includes('2h') || status.includes('ht')) return 'live';
+
   if (hasScore && status === '') return 'finished';
   return 'upcoming';
 }
@@ -141,6 +155,45 @@ function mapEventToMatch(event) {
   };
 }
 
+// ---------- SHARED UPSERT HELPER ----------
+
+async function upsertMatchRows(rows) {
+  const { data: existing, error: fetchError } = await supabaseClient
+    .from('matches')
+    .select('id, sportsdb_event_id, google_form_url');
+
+  if (fetchError) throw fetchError;
+
+  const existingMap = {};
+  (existing || []).forEach(m => {
+    if (m.sportsdb_event_id) existingMap[m.sportsdb_event_id] = m;
+  });
+
+  const mappedRows = rows.map(mapped => {
+    const existingRow = existingMap[mapped.sportsdb_event_id];
+    if (existingRow) {
+      mapped.google_form_url = existingRow.google_form_url; // preserve manual links
+    }
+    return mapped;
+  });
+
+  // ✅ FIX 1 & 2: use .select() so we get IDs back for point recalculation
+  const { data: upsertedRows, error: upsertError } = await supabaseClient
+    .from('matches')
+    .upsert(mappedRows, { onConflict: 'sportsdb_event_id' })
+    .select('id, status, actual_outcome');
+
+  if (upsertError) throw upsertError;
+
+  // ✅ FIX 1: loop over upsertedRows (has real IDs) not mappedRows (id is undefined)
+  const finished = (upsertedRows || []).filter(r => r.status === 'finished' && r.actual_outcome);
+  for (const m of finished) {
+    await recalculateMatchPoints(m.id);
+  }
+
+  return mappedRows.length;
+}
+
 // ---------- SYNC FUNCTIONS ----------
 
 async function syncWorldCupSchedule() {
@@ -149,79 +202,20 @@ async function syncWorldCupSchedule() {
     return { synced: 0, message: 'No events returned from TheSportsDB for this season.' };
   }
 
-  const { data: existing, error: fetchError } = await supabaseClient
-    .from('matches')
-    .select('id, sportsdb_event_id, google_form_url');
-
-  if (fetchError) throw fetchError;
-
-  const existingMap = {};
-  (existing || []).forEach(m => {
-    if (m.sportsdb_event_id) existingMap[m.sportsdb_event_id] = m;
-  });
-
-  const rows = events.map(ev => {
-    const mapped = mapEventToMatch(ev);
-    const existingRow = existingMap[mapped.sportsdb_event_id];
-    if (existingRow) {
-      //mapped.id = existingRow.id;
-      mapped.google_form_url = existingRow.google_form_url;
-    }
-    return mapped;
-  });
-
-  const { error: upsertError } = await supabaseClient
-    .from('matches')
-    .upsert(rows, { onConflict: 'sportsdb_event_id' });
-
-  if (upsertError) throw upsertError;
-
-  const finishedWithScores = rows.filter(r => r.status === 'finished' && r.actual_outcome);
-  for (const m of finishedWithScores) {
-    if (m.id) await recalculateMatchPoints(m.id);
-  }
-
-  return { synced: rows.length, message: `Synced ${rows.length} matches from TheSportsDB.` };
+  const rows = events.map(mapEventToMatch);
+  const count = await upsertMatchRows(rows);
+  return { synced: count, message: `✅ Synced ${count} matches from TheSportsDB.` };
 }
 
 async function syncTodayMatches() {
-  const today = new Date().toISOString().slice(0, 10);
+  // Use Phnom Penh local date so UTC midnight doesn't cut off today's matches
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Phnom_Penh' });
   const events = await fetchEventsByDay(today);
   if (events.length === 0) {
     return { synced: 0, message: 'No World Cup matches scheduled today.' };
   }
 
-  const { data: existing, error: fetchError } = await supabaseClient
-    .from('matches')
-    .select('id, sportsdb_event_id, google_form_url');
-
-  if (fetchError) throw fetchError;
-
-  const existingMap = {};
-  (existing || []).forEach(m => {
-    if (m.sportsdb_event_id) existingMap[m.sportsdb_event_id] = m;
-  });
-
-  const rows = events.map(ev => {
-    const mapped = mapEventToMatch(ev);
-    const existingRow = existingMap[mapped.sportsdb_event_id];
-    if (existingRow) {
-      //mapped.id = existingRow.id;
-      mapped.google_form_url = existingRow.google_form_url;
-    }
-    return mapped;
-  });
-
-  const { error: upsertError } = await supabaseClient
-    .from('matches')
-    .upsert(rows, { onConflict: 'sportsdb_event_id' });
-
-  if (upsertError) throw upsertError;
-
-  const finishedWithScores = rows.filter(r => r.status === 'finished' && r.actual_outcome);
-  for (const m of finishedWithScores) {
-    if (m.id) await recalculateMatchPoints(m.id);
-  }
-
-  return { synced: rows.length, message: `Synced ${rows.length} matches for today.` };
+  const rows = events.map(mapEventToMatch);
+  const count = await upsertMatchRows(rows);
+  return { synced: count, message: `✅ Synced ${count} matches for today.` };
 }

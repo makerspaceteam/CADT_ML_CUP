@@ -66,6 +66,7 @@
               <label>Stage</label>
               <select id="m-stage" required>
                 <option value="group">Group Stage</option>
+                <option value="round32">Round of 32</option>
                 <option value="round16">Round of 16</option>
                 <option value="quarter">Quarter-Final</option>
                 <option value="semi">Semi-Final</option>
@@ -74,7 +75,7 @@
               </select>
             </div>
             <div class="form-group">
-              <label>Group (A-H, if group stage)</label>
+              <label>Group (A-L, if group stage)</label>
               <input type="text" id="m-group" maxlength="1" placeholder="A">
             </div>
             <div class="form-group">
@@ -143,6 +144,7 @@
           </label>
         </div>
         <div id="sync-msg"></div>
+        <p id="last-sync" style="margin-top:10px; color:#999;">Never synced</p>
         <p style="color: var(--gray); font-size: 0.8rem; margin-top: 12px;">
           Note: Free tier is limited to 30 requests/minute. New matches are added with
           <code>stage</code> auto-detected from TheSportsDB round info — double check
@@ -153,24 +155,78 @@
 
     <!-- TAB: ENTER RESULTS -->
     <div class="tab-content" id="tab-results">
-      <p style="color: var(--gray); margin-bottom: 12px;">Select a match, enter the final score, then save to auto-calculate points for all predictions.</p>
-      <div id="results-msg"></div>
-      <div class="card">
+      <div id="results-msg" style="margin-bottom: 12px;"></div>
+
+      <div class="card" style="margin-bottom: 16px;">
         <div class="form-group">
-          <label>Match</label>
+          <label>Select Match</label>
           <select id="r-match"></select>
         </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-          <div class="form-group">
-            <label>Home Score</label>
-            <input type="number" id="r-home-score" min="0">
+
+        <!-- Match info banner -->
+        <div id="r-match-info" style="
+          display:none;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid #333;
+          border-radius: 8px;
+          padding: 10px 14px;
+          margin-bottom: 16px;
+          font-size: 0.85rem;
+          color: var(--gray);">
+        </div>
+
+        <!-- Score inputs with team names as labels -->
+        <div style="display:grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: end; margin-bottom: 12px;">
+          <div class="form-group" style="margin:0;">
+            <label id="r-home-label" style="font-size:1rem; font-weight:600;">Home Score</label>
+            <input type="number" id="r-home-score" min="0"
+              style="font-size: 1.6rem; text-align:center; padding: 10px; font-weight:700;">
           </div>
-          <div class="form-group">
-            <label>Away Score</label>
-            <input type="number" id="r-away-score" min="0">
+          <div style="font-size: 1.8rem; color: #555; padding-bottom: 10px; text-align:center;">–</div>
+          <div class="form-group" style="margin:0;">
+            <label id="r-away-label" style="font-size:1rem; font-weight:600;">Away Score</label>
+            <input type="number" id="r-away-score" min="0"
+              style="font-size: 1.6rem; text-align:center; padding: 10px; font-weight:700;">
           </div>
         </div>
-        <button class="btn btn-primary" id="r-save">Save Result & Calculate Points</button>
+
+        <!-- Live outcome preview -->
+        <div id="r-outcome-preview" style="
+          text-align: center;
+          font-size: 1rem;
+          font-weight: 600;
+          color: var(--yellow);
+          margin-bottom: 16px;
+          min-height: 24px;">
+        </div>
+
+        <!-- Status override -->
+        <div class="form-group">
+          <label>Set Match Status</label>
+          <select id="r-status">
+            <option value="finished">✅ Finished</option>
+            <option value="live">🔴 Live</option>
+            <option value="upcoming">⏳ Upcoming</option>
+          </select>
+        </div>
+
+        <!-- Synced warning — shows but doesn't block saving -->
+        <div id="r-sync-warning" style="display:none; margin-bottom:14px; padding: 10px 14px;
+          background: #2a2000; border: 1px solid #665500; border-radius: 6px;
+          color: #ffcc00; font-size: 0.85rem;">
+          ⚠️ This match is synced from TheSportsDB. Saving here will override the API score until the next sync overwrites it.
+        </div>
+
+        <div style="display:flex; gap: 10px; flex-wrap: wrap;">
+          <button class="btn btn-primary" id="r-save">💾 Save Result & Calculate Points</button>
+          <button class="btn btn-outline" id="r-recalc">🔄 Recalculate Points Only</button>
+        </div>
+      </div>
+
+      <!-- Pending results quick-jump list -->
+      <div class="card">
+        <h4 style="color: var(--yellow); margin-bottom: 12px;">⏳ Matches Needing Results</h4>
+        <div id="r-pending-list"></div>
       </div>
     </div>
 
@@ -253,7 +309,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="shared/config.js"></script>
-<script src="shared/supabase-client.js"></script>
+  <script src="shared/supabase-client.js"></script>
   <script src="shared/auth.js"></script>
   <script src="shared/scoring.js"></script>
   <script src="shared/sportsdb.js"></script>
@@ -262,7 +318,6 @@
     let allUsersCache = [];
 
     // ---------- ACCESS CONTROL ----------
-    // requireAdmin() is synchronous — no need to await
     (async () => {
       const adminProfile = await requireAdmin();
       if (adminProfile) {
@@ -274,8 +329,11 @@
           await populateResultsTab();
           await populatePredictionsTab();
         });
+        await runSync(syncTodayMatches, 'sync-today', true);
+        // startAutoSync(); // uncomment to enable on load
       }
     })();
+
     // ---------- TABS ----------
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -290,12 +348,19 @@
     // TAB 1: MATCHES CRUD
     // ============================================
     const STAGE_LABELS = {
-      group: 'Group Stage', round16: 'Round of 16', quarter: 'Quarter-Final',
-      semi: 'Semi-Final', third_place: '3rd Place', final: 'Final'
+      group: 'Group Stage', round32: 'Round of 32', round16: 'Round of 16',
+      quarter: 'Quarter-Final', semi: 'Semi-Final', third_place: '3rd Place', final: 'Final'
     };
 
+    document.getElementById('m-home').addEventListener('blur', e => {
+      document.getElementById('m-home-flag').value = getFlag(e.target.value.trim());
+    });
+    document.getElementById('m-away').addEventListener('blur', e => {
+      document.getElementById('m-away-flag').value = getFlag(e.target.value.trim());
+    });
+
     async function loadMatchesTab() {
-      const { data, error } = await supabaseClient.from('matches').select('*').order('match_date');
+      const { data, error } = await supabaseClient.from('matches').select('*').order('match_date', { ascending: true });
       if (error) {
         document.getElementById('matches-list').innerHTML = `<div class="error-msg">${error.message}</div>`;
         return;
@@ -312,8 +377,11 @@
       }
       const rows = allMatchesCache.map(m => `
         <tr>
-          <td>${m.id}</td>
-          <td>${m.group_name ? 'Group ' + m.group_name : STAGE_LABELS[m.stage]}</td>
+          <td>
+            ${m.id}
+            ${m.sportsdb_event_id ? '<br><small style="color:#888">SYNC</small>' : ''}
+          </td>
+          <td>${m.group_name ? 'Group ' + m.group_name : (STAGE_LABELS[m.stage] || m.stage)}</td>
           <td>${m.team_home_flag || ''} ${m.team_home} vs ${m.team_away} ${m.team_away_flag || ''}</td>
           <td>${new Date(m.match_date).toLocaleString()}</td>
           <td><span class="status-pill status-${m.status}">${m.status}</span></td>
@@ -336,6 +404,7 @@
       const m = allMatchesCache.find(x => x.id === id);
       if (!m) return;
       document.getElementById('match-id').value = m.id;
+      document.getElementById('match-id').dataset.sportsdb = m.sportsdb_event_id || '';
       document.getElementById('m-stage').value = m.stage;
       document.getElementById('m-group').value = m.group_name || '';
       document.getElementById('m-home').value = m.team_home;
@@ -360,6 +429,7 @@
         if (el) el.value = el.tagName === 'SELECT' ? el.options[0].value : '';
       });
       document.getElementById('match-id').value = '';
+      document.getElementById('match-id').dataset.sportsdb = '';
       document.getElementById('match-form-title').textContent = 'Add New Match';
       document.getElementById('match-cancel-edit').style.display = 'none';
     }
@@ -367,9 +437,14 @@
     document.getElementById('match-cancel-edit').addEventListener('click', resetMatchForm);
 
     async function deleteMatch(id) {
-      if (!confirm('Delete this match? This will also delete all predictions for it.')) return;
+      const match = allMatchesCache.find(m => m.id === id);
+      if (match?.sportsdb_event_id) {
+        if (!confirm('This match was synced from TheSportsDB.\n\nDelete anyway? It will be re-added on next sync.')) return;
+      } else {
+        if (!confirm('Delete this match? This will also delete all predictions for it.')) return;
+      }
       const { error } = await supabaseClient.from('matches').delete().eq('id', id);
-      if (error) { alert('Error: ' + error.message); return; }
+      if (error) { alert(error.message); return; }
       await loadMatchesTab();
       await populateResultsTab();
       await populatePredictionsTab();
@@ -378,17 +453,14 @@
     document.getElementById('match-save-btn').addEventListener('click', async () => {
       const msgArea = document.getElementById('match-msg');
       msgArea.innerHTML = '';
-
       const id = document.getElementById('match-id').value;
       const homeTeam = document.getElementById('m-home').value.trim();
       const awayTeam = document.getElementById('m-away').value.trim();
       const matchDate = document.getElementById('m-date').value;
-
       if (!homeTeam || !awayTeam || !matchDate) {
         msgArea.innerHTML = `<div class="error-msg">Home team, away team, and date are required.</div>`;
         return;
       }
-
       const payload = {
         stage: document.getElementById('m-stage').value,
         group_name: document.getElementById('m-group').value.trim().toUpperCase() || null,
@@ -399,21 +471,19 @@
         match_date: new Date(matchDate).toISOString(),
         status: document.getElementById('m-status').value,
         venue: document.getElementById('m-venue').value.trim() || null,
-        google_form_url: document.getElementById('m-form-url').value.trim() || null
+        google_form_url: document.getElementById('m-form-url').value.trim() || null,
+        sportsdb_event_id: document.getElementById('match-id').dataset.sportsdb || null, // ✅ null not undefined
       };
-
       let error;
       if (id) {
         ({ error } = await supabaseClient.from('matches').update(payload).eq('id', id));
       } else {
         ({ error } = await supabaseClient.from('matches').insert(payload));
       }
-
       if (error) {
         msgArea.innerHTML = `<div class="error-msg">${error.message}</div>`;
         return;
       }
-
       msgArea.innerHTML = `<div class="success-msg">✅ Match saved!</div>`;
       resetMatchForm();
       await loadMatchesTab();
@@ -426,46 +496,124 @@
     // ============================================
     async function populateResultsTab() {
       const sel = document.getElementById('r-match');
-
       if (allMatchesCache.length === 0) {
         sel.innerHTML = `<option value="">-- No matches available --</option>`;
-        document.getElementById('r-home-score').value = '';
-        document.getElementById('r-away-score').value = '';
         return;
       }
 
-      sel.innerHTML = allMatchesCache.map(m =>
-        `<option value="${m.id}">#${m.id} - ${m.team_home} vs ${m.team_away} (${new Date(m.match_date).toLocaleDateString()}) ${m.actual_home_score != null ? '✅ ' + m.actual_home_score + ':' + m.actual_away_score : '⏳ pending'}</option>`
-      ).join('');
+      // Sort: live first, then finished, then upcoming
+      const order = { live: 0, finished: 1, upcoming: 2 };
+      const sorted = [...allMatchesCache].sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
 
-      // Auto-select the last finished match
-      const finishedMatches = allMatchesCache.filter(m => m.status === 'finished');
-      const lastFinished = finishedMatches[finishedMatches.length - 1];
+      sel.innerHTML = sorted.map(m => {
+        const score = m.actual_home_score != null
+          ? `${m.actual_home_score}:${m.actual_away_score} ✅`
+          : m.status === 'live' ? '🔴 LIVE' : '⏳';
+        const date = new Date(m.match_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        return `<option value="${m.id}">${score}  #${m.id} ${m.team_home} vs ${m.team_away} (${date})</option>`;
+      }).join('');
 
-      if (lastFinished) {
-        sel.value = lastFinished.id;
-      }
+      // Auto-select: live > pending-finished > last finished
+      const live = sorted.find(m => m.status === 'live');
+      const pendingFinished = sorted.find(m => m.status === 'finished' && m.actual_home_score == null);
+      const lastFinished = [...allMatchesCache].filter(m => m.status === 'finished').pop();
+      const autoSelect = live || pendingFinished || lastFinished;
+      if (autoSelect) sel.value = autoSelect.id;
 
       sel.removeEventListener('change', fillResultFields);
       sel.addEventListener('change', fillResultFields);
       fillResultFields();
+      renderPendingList();
     }
 
     function fillResultFields() {
       const id = parseInt(document.getElementById('r-match').value);
       const m = allMatchesCache.find(x => x.id === id);
       if (!m) return;
+
+      // Scores
       document.getElementById('r-home-score').value = m.actual_home_score ?? '';
       document.getElementById('r-away-score').value = m.actual_away_score ?? '';
+      document.getElementById('r-status').value = m.status;
+
+      // Team name labels
+      document.getElementById('r-home-label').textContent = `${m.team_home_flag || ''} ${m.team_home}`;
+      document.getElementById('r-away-label').textContent = `${m.team_away_flag || ''} ${m.team_away}`;
+
+      // Info banner
+      const infoEl = document.getElementById('r-match-info');
+      const date = new Date(m.match_date).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+      infoEl.style.display = 'block';
+      infoEl.innerHTML = `
+        📅 ${date}
+        ${m.venue ? ` &nbsp;|&nbsp; 🏟️ ${m.venue}` : ''}
+        &nbsp;|&nbsp; <strong>${STAGE_LABELS[m.stage] || m.stage}${m.group_name ? ' ' + m.group_name : ''}</strong>
+        ${m.sportsdb_event_id ? ' &nbsp;|&nbsp; <span style="color:#888">TheSportsDB #' + m.sportsdb_event_id + '</span>' : ''}
+      `;
+
+      // Sync warning
+      document.getElementById('r-sync-warning').style.display = m.sportsdb_event_id ? 'block' : 'none';
+
+      // Clear msg and update outcome preview
+      document.getElementById('results-msg').innerHTML = '';
+      updateOutcomePreview();
+    }
+
+    function updateOutcomePreview() {
+      const h = parseInt(document.getElementById('r-home-score').value);
+      const a = parseInt(document.getElementById('r-away-score').value);
+      const el = document.getElementById('r-outcome-preview');
+      const id = parseInt(document.getElementById('r-match').value);
+      const m = allMatchesCache.find(x => x.id === id);
+      if (!m || isNaN(h) || isNaN(a)) { el.textContent = ''; return; }
+      const outcome = getOutcome(h, a);
+      const labels = {
+        home: `🏆 ${m.team_home} wins`,
+        away: `🏆 ${m.team_away} wins`,
+        draw: '🤝 Draw'
+      };
+      el.textContent = `→ ${labels[outcome]}`;
+    }
+
+    document.getElementById('r-home-score').addEventListener('input', updateOutcomePreview);
+    document.getElementById('r-away-score').addEventListener('input', updateOutcomePreview);
+
+    function renderPendingList() {
+      const container = document.getElementById('r-pending-list');
+      // Matches that are finished/live but still missing a score
+      const pending = allMatchesCache.filter(m =>
+        (m.status === 'finished' || m.status === 'live') && m.actual_home_score == null
+      );
+      if (pending.length === 0) {
+        container.innerHTML = `<div style="color:#888; font-size:0.9rem;">All results entered. ✅</div>`;
+        return;
+      }
+      container.innerHTML = pending.map(m => `
+        <div style="display:flex; justify-content:space-between; align-items:center;
+          padding: 8px 0; border-bottom: 1px solid #2a2a2a;">
+          <span style="color:#ccc;">
+            <span class="status-pill status-${m.status}" style="font-size:0.75rem;">${m.status}</span>
+            &nbsp;#${m.id} ${m.team_home_flag || ''} ${m.team_home} vs ${m.team_away} ${m.team_away_flag || ''}
+            <small style="color:#666;"> (${new Date(m.match_date).toLocaleDateString()})</small>
+          </span>
+          <button class="btn btn-sm btn-outline" onclick="jumpToMatch(${m.id})">Enter Score</button>
+        </div>
+      `).join('');
+    }
+
+    function jumpToMatch(id) {
+      document.getElementById('r-match').value = id;
+      fillResultFields();
+      document.getElementById('r-match').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     document.getElementById('r-save').addEventListener('click', async () => {
       const msgArea = document.getElementById('results-msg');
       msgArea.innerHTML = '';
-
       const matchId = parseInt(document.getElementById('r-match').value);
       const homeScore = parseInt(document.getElementById('r-home-score').value);
       const awayScore = parseInt(document.getElementById('r-away-score').value);
+      const status = document.getElementById('r-status').value;
 
       if (isNaN(homeScore) || isNaN(awayScore)) {
         msgArea.innerHTML = `<div class="error-msg">Please enter both scores.</div>`;
@@ -473,15 +621,9 @@
       }
 
       const outcome = getOutcome(homeScore, awayScore);
-
       const { error: updateError } = await supabaseClient
         .from('matches')
-        .update({
-          actual_home_score: homeScore,
-          actual_away_score: awayScore,
-          actual_outcome: outcome,
-          status: 'finished'
-        })
+        .update({ actual_home_score: homeScore, actual_away_score: awayScore, actual_outcome: outcome, status })
         .eq('id', matchId);
 
       if (updateError) {
@@ -500,6 +642,25 @@
       await populateResultsTab();
     });
 
+    // Recalculate points without touching the score
+    document.getElementById('r-recalc').addEventListener('click', async () => {
+      const msgArea = document.getElementById('results-msg');
+      const matchId = parseInt(document.getElementById('r-match').value);
+      const m = allMatchesCache.find(x => x.id === matchId);
+      if (!m || m.actual_home_score == null) {
+        msgArea.innerHTML = `<div class="error-msg">No result yet — enter a score first.</div>`;
+        return;
+      }
+      msgArea.innerHTML = `<div class="loading">Recalculating points...</div>`;
+      const { error } = await recalculateMatchPoints(matchId);
+      if (error) {
+        msgArea.innerHTML = `<div class="error-msg">Failed: ${error.message}</div>`;
+      } else {
+        msgArea.innerHTML = `<div class="success-msg">✅ Points recalculated for match #${matchId}!</div>`;
+        await loadPredictionsList();
+      }
+    });
+
     // ============================================
     // TAB 3: MANUAL PREDICTIONS
     // ============================================
@@ -514,55 +675,36 @@
       userSel.innerHTML = allUsersCache.map(u =>
         `<option value="${u.id}">${u.username}${u.full_name ? ' - ' + u.full_name : ''}</option>`
       ).join('');
-
       const matchSel = document.getElementById('p-match');
       matchSel.innerHTML = allMatchesCache.map(m =>
         `<option value="${m.id}">#${m.id} - ${m.team_home} vs ${m.team_away}</option>`
       ).join('');
-
       await loadPredictionsList();
     }
 
     document.getElementById('p-save').addEventListener('click', async () => {
       const msgArea = document.getElementById('pred-msg');
       msgArea.innerHTML = '';
-
       const userId = document.getElementById('p-user').value;
       const matchId = parseInt(document.getElementById('p-match').value);
       const homeScore = document.getElementById('p-home-score').value;
       const awayScore = document.getElementById('p-away-score').value;
       const outcome = document.getElementById('p-outcome').value;
       const confidence = document.getElementById('p-confidence').value || null;
-
       if (!userId || !matchId) {
         msgArea.innerHTML = `<div class="error-msg">Select a student and match.</div>`;
         return;
       }
-
       const payload = {
-        user_id: userId,
-        match_id: matchId,
+        user_id: userId, match_id: matchId,
         predicted_home_score: homeScore !== '' ? parseInt(homeScore) : null,
         predicted_away_score: awayScore !== '' ? parseInt(awayScore) : null,
-        predicted_outcome: outcome,
-        confidence: confidence,
-        source: 'manual'
+        predicted_outcome: outcome, confidence, source: 'manual'
       };
-
-      const { error } = await supabaseClient
-        .from('predictions')
-        .upsert(payload, { onConflict: 'user_id,match_id' });
-
-      if (error) {
-        msgArea.innerHTML = `<div class="error-msg">${error.message}</div>`;
-        return;
-      }
-
+      const { error } = await supabaseClient.from('predictions').upsert(payload, { onConflict: 'user_id,match_id' });
+      if (error) { msgArea.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
       const m = allMatchesCache.find(x => x.id === matchId);
-      if (m && m.actual_home_score != null) {
-        await recalculateMatchPoints(matchId);
-      }
-
+      if (m && m.actual_home_score != null) await recalculateMatchPoints(matchId);
       msgArea.innerHTML = `<div class="success-msg">✅ Prediction saved!</div>`;
       await loadPredictionsList();
     });
@@ -572,17 +714,9 @@
         .from('predictions')
         .select('*, profiles(username, full_name), matches(team_home, team_away)')
         .order('match_id');
-
       const container = document.getElementById('predictions-list');
-      if (error) {
-        container.innerHTML = `<div class="error-msg">${error.message}</div>`;
-        return;
-      }
-      if (!data || data.length === 0) {
-        container.innerHTML = `<div class="empty-state">No predictions yet.</div>`;
-        return;
-      }
-
+      if (error) { container.innerHTML = `<div class="error-msg">${error.message}</div>`; return; }
+      if (!data || data.length === 0) { container.innerHTML = `<div class="empty-state">No predictions yet.</div>`; return; }
       const rows = data.map(p => `
         <tr>
           <td>${p.profiles?.username || p.user_id}</td>
@@ -595,13 +729,11 @@
           <td><button class="btn btn-sm btn-danger" onclick="deletePrediction(${p.id})">Delete</button></td>
         </tr>
       `).join('');
-
       container.innerHTML = `
         <table class="admin-table">
           <thead><tr><th>Student</th><th>Match</th><th>Score</th><th>Outcome</th><th>Confidence</th><th>Source</th><th>Points</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
-        </table>
-      `;
+        </table>`;
     }
 
     async function deletePrediction(id) {
@@ -620,74 +752,50 @@
       const resultsArea = document.getElementById('csv-results');
       msgArea.innerHTML = '';
       resultsArea.innerHTML = '';
-
       if (!fileInput.files.length) {
         msgArea.innerHTML = `<div class="error-msg">Please choose a CSV file.</div>`;
         return;
       }
-
       Papa.parse(fileInput.files[0], {
-        header: true,
-        skipEmptyLines: true,
-        complete: async (results) => {
-          await processCsvRows(results.data, msgArea, resultsArea);
-        },
-        error: (err) => {
-          msgArea.innerHTML = `<div class="error-msg">CSV parse error: ${err.message}</div>`;
-        }
+        header: true, skipEmptyLines: true,
+        complete: async (results) => { await processCsvRows(results.data, msgArea, resultsArea); },
+        error: (err) => { msgArea.innerHTML = `<div class="error-msg">CSV parse error: ${err.message}</div>`; }
       });
     });
 
     async function processCsvRows(rows, msgArea, resultsArea) {
       msgArea.innerHTML = `<div class="loading">Processing ${rows.length} rows...</div>`;
-
       const { data: profiles } = await supabaseClient.from('profiles').select('id, username, email, full_name');
-
       const logs = [];
       let successCount = 0, errorCount = 0;
-
       for (const row of rows) {
         const normalized = {};
-        for (const key in row) {
-          normalized[key.trim().toLowerCase()] = row[key]?.trim();
-        }
-
+        for (const key in row) normalized[key.trim().toLowerCase()] = row[key]?.trim();
         const identifier = normalized.email || normalized.username;
         const matchId = parseInt(normalized.match_id);
-
         if (!identifier || !matchId) {
           logs.push(`<tr><td colspan="2" class="error-msg">Skipped: missing email/username or match_id</td></tr>`);
-          errorCount++;
-          continue;
+          errorCount++; continue;
         }
-
         const usernameGuess = identifier.includes('@') ? identifier.split('@')[0] : identifier;
         const user = profiles.find(p =>
           (p.email && p.email.toLowerCase() === identifier.toLowerCase()) ||
           p.username.toLowerCase() === usernameGuess.toLowerCase() ||
           p.username.toLowerCase() === identifier.toLowerCase()
         );
-
         if (!user) {
           logs.push(`<tr><td>${identifier}</td><td class="error-msg">No matching student found</td></tr>`);
-          errorCount++;
-          continue;
+          errorCount++; continue;
         }
-
         const payload = {
-          user_id: user.id,
-          match_id: matchId,
+          user_id: user.id, match_id: matchId,
           predicted_home_score: normalized.predicted_home_score ? parseInt(normalized.predicted_home_score) : null,
           predicted_away_score: normalized.predicted_away_score ? parseInt(normalized.predicted_away_score) : null,
           predicted_outcome: normalized.predicted_outcome || null,
           confidence: normalized.confidence || null,
           source: 'csv_import'
         };
-
-        const { error } = await supabaseClient
-          .from('predictions')
-          .upsert(payload, { onConflict: 'user_id,match_id' });
-
+        const { error } = await supabaseClient.from('predictions').upsert(payload, { onConflict: 'user_id,match_id' });
         if (error) {
           logs.push(`<tr><td>${user.username} (#${matchId})</td><td class="error-msg">${error.message}</td></tr>`);
           errorCount++;
@@ -696,42 +804,31 @@
           successCount++;
         }
       }
-
       msgArea.innerHTML = `<div class="success-msg">Done: ${successCount} imported, ${errorCount} errors.</div>`;
       resultsArea.innerHTML = `
         <table class="admin-table">
           <thead><tr><th>Student / Match</th><th>Result</th></tr></thead>
           <tbody>${logs.join('')}</tbody>
-        </table>
-      `;
-
+        </table>`;
       const matchIds = [...new Set(rows.map(r => parseInt(r.match_id || r.Match_ID || r.MATCH_ID)).filter(Boolean))];
       for (const mid of matchIds) {
         const m = allMatchesCache.find(x => x.id === mid);
-        if (m && m.actual_home_score != null) {
-          await recalculateMatchPoints(mid);
-        }
+        if (m && m.actual_home_score != null) await recalculateMatchPoints(mid);
       }
       await loadPredictionsList();
     }
 
     // ============================================
-    // TAB 5: API SYNC (TheSportsDB)
+    // TAB 5: API SYNC
     // ============================================
     let autoSyncInterval = null;
 
-    document.getElementById('sync-full').addEventListener('click', async () => {
-      await runSync(syncWorldCupSchedule, 'sync-full');
-    });
-
-    document.getElementById('sync-today').addEventListener('click', async () => {
-      await runSync(syncTodayMatches, 'sync-today');
-    });
+    document.getElementById('sync-full').addEventListener('click', async () => { await runSync(syncWorldCupSchedule, 'sync-full'); });
+    document.getElementById('sync-today').addEventListener('click', async () => { await runSync(syncTodayMatches, 'sync-today'); });
 
     document.getElementById('auto-sync-toggle').addEventListener('change', (e) => {
-      if (e.target.checked) {
-        startAutoSync();
-      } else {
+      if (e.target.checked) { startAutoSync(); }
+      else {
         stopAutoSync();
         document.getElementById('sync-msg').innerHTML = `<div class="success-msg">Auto-sync disabled.</div>`;
       }
@@ -741,12 +838,12 @@
       if (autoSyncInterval) return;
       autoSyncInterval = setInterval(() => runSync(syncTodayMatches, 'sync-today', true), 2 * 60 * 1000);
       document.getElementById('auto-sync-toggle').checked = true;
-      document.getElementById('sync-msg').innerHTML = `<div class="success-msg">Auto-sync enabled (every 2 min).</div>`;
     }
 
     function stopAutoSync() {
       clearInterval(autoSyncInterval);
       autoSyncInterval = null;
+      document.getElementById('auto-sync-toggle').checked = false;
     }
 
     async function runSync(syncFn, btnId, silent = false) {
@@ -755,25 +852,20 @@
       const originalText = btn ? btn.textContent : '';
       if (btn) { btn.disabled = true; btn.textContent = 'Syncing...'; }
       if (!silent) msgArea.innerHTML = `<div class="loading">Fetching from TheSportsDB...</div>`;
-
       try {
         const result = await syncFn();
-        msgArea.innerHTML = `<div class="success-msg">${result.message}</div>`;
+        document.getElementById('last-sync').textContent = 'Last sync: ' + new Date().toLocaleString();
+        if (!silent) msgArea.innerHTML = `<div class="success-msg">${result.message} — ${new Date().toLocaleTimeString()}</div>`;
         await loadMatchesTab();
         await populateResultsTab();
         await populatePredictionsTab();
       } catch (err) {
-        msgArea.innerHTML = `<div class="error-msg">Sync failed: ${err.message}</div>`;
+        if (!silent) msgArea.innerHTML = `<div class="error-msg">Sync failed: ${err.message}</div>`;
+        else console.error('Auto-sync failed:', err.message);
       } finally {
         if (btn) { btn.disabled = false; btn.textContent = originalText; }
       }
     }
-
-    // Silent initial sync + start auto-sync loop
-    (async () => {
-      await runSync(syncTodayMatches, 'sync-today', true);
-      startAutoSync();
-    })();
 
     // Hamburger menu
     document.getElementById('hamburger').addEventListener('click', () => {
