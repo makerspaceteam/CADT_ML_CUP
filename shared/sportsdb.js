@@ -17,7 +17,6 @@ function getOutcome(home, away) {
   return 'draw';
 }
 
-// ✅ FIX 3: return { error } so callers can check for failures
 async function recalculateMatchPoints(matchId) {
   const { error } = await supabaseClient.rpc('calculate_match_points', { p_match_id: matchId });
   if (error) console.error('Failed to recalculate points for match', matchId, error);
@@ -31,7 +30,37 @@ async function fetchWorldCupSchedule() {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`TheSportsDB error: ${res.status}`);
   const data = await res.json();
-  return data.events || [];
+  const events = data.events || [];
+
+  // ✅ FIX: Also fetch next 7 days individually to catch FIFA schedule updates
+  // that eventsseason.php may not reflect due to caching
+  const extras = await fetchUpcomingDays(7);
+  const seen = new Set(events.map(e => e.idEvent));
+  for (const e of extras) {
+    if (!seen.has(e.idEvent)) {
+      events.push(e);
+      seen.add(e.idEvent);
+    }
+  }
+
+  return events;
+}
+
+// ✅ NEW: Fetch N upcoming days one by one to catch schedule updates
+async function fetchUpcomingDays(days) {
+  const results = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Phnom_Penh' });
+    try {
+      const events = await fetchEventsByDay(dateStr);
+      results.push(...events);
+    } catch (e) {
+      console.warn(`fetchUpcomingDays: failed for ${dateStr}`, e.message);
+    }
+  }
+  return results;
 }
 
 async function fetchEventsByDay(dateStr) {
@@ -52,23 +81,56 @@ async function fetchEventById(idEvent) {
 
 // ---------- MAPPING HELPERS ----------
 
+// ✅ FIX: Reordered — most specific checks first so 'final' doesn't
+// swallow 'round of 32', 'round of 16', etc.
 function mapStage(event) {
   const round = (event.strRound || '').toLowerCase();
   const desc = (event.strDescriptionEN || '').toLowerCase();
   const combined = round + ' ' + desc;
 
-  if (combined.includes('final') && combined.includes('3rd')) return { stage: 'third_place', group: null };
-  if (combined.includes('final') && !combined.includes('semi') && !combined.includes('quarter')) return { stage: 'final', group: null };
-  if (combined.includes('semi')) return { stage: 'semi', group: null };
-  if (combined.includes('quarter')) return { stage: 'quarter', group: null };
-  if (combined.includes('round of 16') || combined.includes('r16')) return { stage: 'round16', group: null };
-  if (combined.includes('round of 32') || combined.includes('r32')) return { stage: 'round32', group: null };
+  if (combined.includes('3rd place') || combined.includes('third place')) return { stage: 'third_place', group: null };
+  if (combined.includes('round of 32') || combined.includes('r32'))        return { stage: 'round32',     group: null };
+  if (combined.includes('round of 16') || combined.includes('r16'))        return { stage: 'round16',     group: null };
+  if (combined.includes('quarter'))                                         return { stage: 'quarter',     group: null };
+  if (combined.includes('semi'))                                            return { stage: 'semi',        group: null };
+  if (combined.includes('final'))                                           return { stage: 'final',       group: null };
+  if (combined.includes('group'))                                           {
+    const groupMatch = combined.match(/group\s*([a-l])/i);
+    return { stage: 'group', group: groupMatch ? groupMatch[1].toUpperCase() : null };
+  }
 
-  const groupMatch = combined.match(/group\s*([a-l])/i);
-  return { stage: 'group', group: groupMatch ? groupMatch[1].toUpperCase() : null };
+  // ✅ TheSportsDB has no round label — detect stage by match date
+  if (event.dateEvent) {
+    const date = new Date(event.dateEvent);
+    const d = date.getTime();
+
+    const GROUP_START  = new Date('2026-06-11').getTime();
+    const GROUP_END    = new Date('2026-06-29').getTime();
+    const R32_START    = new Date('2026-06-29').getTime();
+    const R32_END      = new Date('2026-07-05').getTime();
+    const R16_START    = new Date('2026-07-05').getTime();    
+    const R16_END      = new Date('2026-07-07').getTime();
+    const QF_START     = new Date('2026-07-07').getTime();
+    const QF_END       = new Date('2026-07-11').getTime();
+    const SF_START     = new Date('2026-07-11').getTime();
+    const SF_END       = new Date('2026-07-15').getTime();
+    const THIRD_DATE   = new Date('2026-07-15').getTime();
+    const FINAL_DATE   = new Date('2026-07-16').getTime();
+
+    if (d >= GROUP_START && d < GROUP_END)  return { stage: 'group',       group: null };
+    if (d >= R32_START   && d < R32_END)    return { stage: 'round32',     group: null };
+    if (d >= R16_START   && d < R16_END)    return { stage: 'round16',     group: null };
+    if (d >= QF_START    && d < QF_END)     return { stage: 'quarter',     group: null };
+    if (d >= SF_START    && d < SF_END)     return { stage: 'semi',        group: null };
+    if (d >= THIRD_DATE  && d < FINAL_DATE) return { stage: 'third_place', group: null };
+    if (d >= FINAL_DATE)                    return { stage: 'final',       group: null };
+  }
+
+  // Last resort fallback
+  return { stage: 'group', group: null };
 }
 
-// ✅ FIX 4: time-based fallback so finished matches don't stay stuck on 'live'
+// Time-based fallback so finished matches don't stay stuck on 'live'
 function mapStatus(event) {
   const status = (event.strStatus || '').toLowerCase();
   const hasScore = event.intHomeScore !== null && event.intHomeScore !== undefined &&
@@ -112,7 +174,7 @@ const COUNTRY_FLAGS = {
   'Japan': '🇯🇵', 'South Korea': '🇰🇷', 'Saudi Arabia': '🇸🇦',
   'Australia': '🇦🇺', 'Iran': '🇮🇷', 'Qatar': '🇶🇦', 'Indonesia': '🇮🇩',
   'Iraq': '🇮🇶', 'Jordan': '🇯🇴', 'Uzbekistan': '🇺🇿', 'Thailand': '🇹🇭',
-  'Vietnam': '🇻🇳', 'China': '🇨🇳', 'UAE': '🇦🇪',
+  'Vietnam': '🇻🇳', 'China': '🇨🇳', 'UAE': '🇦🇪', 'Bahrain': '🇧🇭', 'Oman': '🇴🇲',
   'New Zealand': '🇳🇿', 'New Caledonia': '🇳🇨'
 };
 
@@ -177,7 +239,6 @@ async function upsertMatchRows(rows) {
     return mapped;
   });
 
-  // ✅ FIX 1 & 2: use .select() so we get IDs back for point recalculation
   const { data: upsertedRows, error: upsertError } = await supabaseClient
     .from('matches')
     .upsert(mappedRows, { onConflict: 'sportsdb_event_id' })
@@ -185,7 +246,6 @@ async function upsertMatchRows(rows) {
 
   if (upsertError) throw upsertError;
 
-  // ✅ FIX 1: loop over upsertedRows (has real IDs) not mappedRows (id is undefined)
   const finished = (upsertedRows || []).filter(r => r.status === 'finished' && r.actual_outcome);
   for (const m of finished) {
     await recalculateMatchPoints(m.id);
@@ -208,7 +268,7 @@ async function syncWorldCupSchedule() {
 }
 
 async function syncTodayMatches() {
-  // Use Phnom Penh local date so UTC midnight doesn't cut off today's matches
+  // ✅ FIX: Use Phnom Penh local date so UTC midnight doesn't cut off today's matches
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Phnom_Penh' });
   const events = await fetchEventsByDay(today);
   if (events.length === 0) {
