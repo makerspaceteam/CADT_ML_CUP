@@ -105,8 +105,8 @@ function mapStage(event) {
     const d = date.getTime();
 
     const GROUP_START  = new Date('2026-06-11').getTime();
-    const GROUP_END    = new Date('2026-06-29').getTime();
-    const R32_START    = new Date('2026-06-29').getTime();
+    const GROUP_END    = new Date('2026-06-28').getTime();
+    const R32_START    = new Date('2026-06-28').getTime();
     const R32_END      = new Date('2026-07-05').getTime();
     const R16_START    = new Date('2026-07-05').getTime();    
     const R16_END      = new Date('2026-07-07').getTime();
