@@ -613,6 +613,7 @@
 
       const outcomeText = outcome === 'home' ? `${teamHome} Win`
                         : outcome === 'away' ? `${teamAway} Win`
+                        : penWinner ? `Draw ${penWinner} wins on penalties`
                         : 'Draw';
 
       document.getElementById('confirm-summary').innerHTML = `

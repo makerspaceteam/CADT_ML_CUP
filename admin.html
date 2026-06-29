@@ -217,6 +217,16 @@
           ⚠️ This match is synced from TheSportsDB. Saving here will override the API score until the next sync overwrites it.
         </div>
 
+        <!-- Penalty winner — shown only for knockout + draw scores -->
+        <div class="form-group" id="r-pen-winner-wrap" style="display:none; 
+          background:rgba(245,197,24,0.05); border:1px solid rgba(245,197,24,0.2); 
+          border-radius:8px; padding:12px; margin-bottom:14px;">
+          <label style="color:#f5c518;">⚽ Penalty Winner (scores are level)</label>
+          <select id="r-pen-winner">
+            <option value="">— Select penalty winner —</option>
+          </select>
+        </div>
+
         <div style="display:flex; gap: 10px; flex-wrap: wrap;">
           <button class="btn btn-primary" id="r-save">💾 Save Result & Calculate Points</button>
           <button class="btn btn-outline" id="r-recalc">🔄 Recalculate Points Only</button>
@@ -554,6 +564,24 @@
       // Sync warning
       document.getElementById('r-sync-warning').style.display = m.sportsdb_event_id ? 'block' : 'none';
 
+      // Populate penalty winner options with actual team names
+      const PENALTY_STAGES = ['round32', 'round16', 'quarter', 'semi', 'third_place', 'final'];
+      const penSel = document.getElementById('r-pen-winner');
+      penSel.innerHTML = `
+        <option value="">— Select penalty winner —</option>
+        <option value="${m.team_home}">${m.team_home_flag || ''} ${m.team_home}</option>
+        <option value="${m.team_away}">${m.team_away_flag || ''} ${m.team_away}</option>
+      `;
+      // Pre-fill if already saved
+      if (m.actual_pen_winner) penSel.value = m.actual_pen_winner;
+
+      // Show penalty field if knockout + scores already equal
+      const isKnockout = PENALTY_STAGES.includes(m.stage);
+      const penWrap = document.getElementById('r-pen-winner-wrap');
+      const h = parseInt(m.actual_home_score);
+      const a = parseInt(m.actual_away_score);
+      penWrap.style.display = (isKnockout && !isNaN(h) && h === a) ? 'block' : 'none';
+
       // Clear msg and update outcome preview
       document.getElementById('results-msg').innerHTML = '';
       updateOutcomePreview();
@@ -567,12 +595,18 @@
       const m = allMatchesCache.find(x => x.id === id);
       if (!m || isNaN(h) || isNaN(a)) { el.textContent = ''; return; }
       const outcome = getOutcome(h, a);
+      const PENALTY_STAGES = ['round32', 'round16', 'quarter', 'semi', 'third_place', 'final'];
+      const isKnockout = PENALTY_STAGES.includes(m.stage);
       const labels = {
         home: `🏆 ${m.team_home} wins`,
         away: `🏆 ${m.team_away} wins`,
-        draw: '🤝 Draw'
+        draw: isKnockout ? '🤝 Draw — select penalty winner below' : '🤝 Draw'
       };
       el.textContent = `→ ${labels[outcome]}`;
+
+      // Show/hide penalty field dynamically
+      const penWrap = document.getElementById('r-pen-winner-wrap');
+      penWrap.style.display = (isKnockout && outcome === 'draw') ? 'block' : 'none';
     }
 
     document.getElementById('r-home-score').addEventListener('input', updateOutcomePreview);
@@ -614,16 +648,37 @@
       const homeScore = parseInt(document.getElementById('r-home-score').value);
       const awayScore = parseInt(document.getElementById('r-away-score').value);
       const status = document.getElementById('r-status').value;
+      const m = allMatchesCache.find(x => x.id === matchId);
 
       if (isNaN(homeScore) || isNaN(awayScore)) {
         msgArea.innerHTML = `<div class="error-msg">Please enter both scores.</div>`;
         return;
       }
 
-      const outcome = getOutcome(homeScore, awayScore);
+      const PENALTY_STAGES = ['round32', 'round16', 'quarter', 'semi', 'third_place', 'final'];
+      const isKnockout = PENALTY_STAGES.includes(m?.stage);
+      let outcome = getOutcome(homeScore, awayScore);
+      let penWinner = null;
+
+      // ✅ Knockout + draw score → pen winner decides actual outcome
+      if (isKnockout && outcome === 'draw') {
+        penWinner = document.getElementById('r-pen-winner').value;
+        if (!penWinner) {
+          msgArea.innerHTML = `<div class="error-msg">Scores are level — select the penalty winner.</div>`;
+          return;
+        }
+        outcome = penWinner === m.team_home ? 'home' : 'away'; // ✅ outcome = pen winner
+      }
+
       const { error: updateError } = await supabaseClient
         .from('matches')
-        .update({ actual_home_score: homeScore, actual_away_score: awayScore, actual_outcome: outcome, status })
+        .update({
+          actual_home_score: homeScore,
+          actual_away_score: awayScore,
+          actual_outcome: outcome,        // home or away — never draw in knockout
+          actual_pen_winner: penWinner,   // store for display
+          status
+        })
         .eq('id', matchId);
 
       if (updateError) {

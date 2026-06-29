@@ -351,8 +351,19 @@
       if (!m) return '';
 
       const isPending = m.status !== 'finished';
-      const isCorrect = !isPending && p.predicted_outcome === m.actual_outcome;
-      const outcomeLabel = isPending ? 'Pending' : (isCorrect ? '✓' : '✗');
+      //const isCorrect = !isPending && p.predicted_outcome === m.actual_outcome;
+      // For knockout draw + pen winner, check against actual_outcome (home/away)
+      const PENALTY_STAGES = ['round32', 'round16', 'quarter', 'semi', 'third_place', 'final'];
+      const isKnockout = PENALTY_STAGES.includes(m.stage);
+
+      let userOutcome = p.predicted_outcome;
+      if (isKnockout && p.predicted_outcome === 'draw' && p.predicted_pen_winner) {
+        // Convert pen winner to home/away for comparison
+        userOutcome = p.predicted_pen_winner === m.team_home ? 'home' : 'away';
+      }
+
+      const isCorrect = !isPending && userOutcome === m.actual_outcome;
+      const outcomeLabel = isPending ? '⏳' : (isCorrect ? '✓' : '✗');
       const outcomeClass = isPending ? 'pending' : (isCorrect ? 'correct' : 'wrong');
 
       const matchDate = new Date(m.match_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -369,7 +380,13 @@
         if (!p.predicted_outcome) return '–';
         if (p.predicted_outcome === 'home') return `${m.team_home_flag || ''} ${m.team_home}`;
         if (p.predicted_outcome === 'away') return `${m.team_away_flag || ''} ${m.team_away}`;
-        if (p.predicted_outcome === 'draw') return `Draw`;
+        if (p.predicted_outcome === 'draw') {
+          // Show penalty winner if they picked one
+          if (p.predicted_pen_winner) {
+            return `Draw <span style="color:#f5c518;">${p.predicted_pen_winner} (pens)</span>`;
+          }
+          return 'Draw';
+        }
         return p.predicted_outcome;
       })();
 
