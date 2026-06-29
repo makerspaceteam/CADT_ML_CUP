@@ -177,6 +177,18 @@
     .conf-badge.high   { background: rgba(76,175,128,0.15);  color: #4caf80; }
     .conf-badge.none   { background: rgba(255,255,255,0.05); color: #aaa; }
 
+    /* Penalty field highlight */
+    .pen-field {
+      grid-column: 1 / -1;
+      background: rgba(245,197,24,0.05);
+      border: 1px solid rgba(245,197,24,0.2);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .pen-field label {
+      color: var(--yellow, #f5c518) !important;
+    }
+
     /* Login nudge */
     .predict-login-nudge {
       font-size: 0.8rem;
@@ -212,7 +224,6 @@
 </head>
 <body>
 
-  <!-- ... (Navbar and other parts remain the same) ... -->
   <nav class="navbar">
     <div class="logo">
       <a href="index.html">
@@ -279,9 +290,7 @@
       <div id="confirm-modal">
         <h3 style="margin:0 0 6px; font-size:1rem; color:#fff;">Confirm your prediction</h3>
         <p style="margin:0 0 16px; font-size:0.8rem; color:#aaa;">You can only submit once — this cannot be changed after submission.</p>
-        
         <div id="confirm-summary" style="background:rgba(255,255,255,0.05); border-radius:8px; padding:12px 14px; margin-bottom:20px; font-size:0.85rem; line-height:1.8; color:#fff;"></div>
-        
         <div style="display:flex; gap:10px; justify-content:flex-end;">
           <button onclick="closeConfirm()" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:8px 18px; border-radius:6px; cursor:pointer; font-size:0.85rem;">Cancel</button>
           <button id="confirm-yes-btn" style="background:#f5c518; color:#111; border:none; padding:8px 20px; border-radius:6px; font-weight:700; font-size:0.85rem; cursor:pointer;">Yes, submit</button>
@@ -310,8 +319,10 @@
     let currentStageFilter = 'all';
     let currentUser = null;
     let myPredictions = {};
+    let pendingPrediction = null;
 
-    let pendingPrediction = null; // Store prediction data before confirmation
+    // Stages that can have penalties (knockout stages only)
+    const PENALTY_STAGES = ['round32', 'round16', 'quarter', 'semi', 'third_place', 'final'];
 
     const STAGE_LABELS = {
       group: 'Group Stage',
@@ -372,7 +383,8 @@
     const MATCH_DURATION_MS = 2 * 60 * 60 * 1000;
 
     function deriveStatus(m) {
-      if (m.status === 'finished' || m.status === 'live') return m.status;
+      if (m.status === 'finished') return 'finished';
+      if (m.status === 'live') return 'live';
       const kickoff = new Date(m.match_date).getTime();
       const now = Date.now();
       if (now >= kickoff + MATCH_DURATION_MS) return 'finished';
@@ -404,8 +416,9 @@
       const isLive = displayStatus === 'live';
       const isFinished = displayStatus === 'finished';
       const matchStarted = isLive || isFinished;
+      const isKnockout = PENALTY_STAGES.includes(m.stage);
 
-      let scoreDisplay = isFinished || isLive 
+      let scoreDisplay = isFinished || isLive
         ? `<div class="score-box">${m.actual_home_score ?? '-'} : ${m.actual_away_score ?? '-'}</div>`
         : `<div class="vs-label">VS</div>`;
 
@@ -422,10 +435,13 @@
         `;
       } else if (isFinished) {
         if (existingPred) {
+          const penText = existingPred.predicted_pen_winner
+            ? ` · Pen winner: <strong>${existingPred.predicted_pen_winner}</strong>` : '';
           predictionSection = `
             <div class="prediction-existing">
               Your prediction: <strong>${existingPred.predicted_home_score ?? '-'} : ${existingPred.predicted_away_score ?? '-'}</strong>
               · <strong>${existingPred.predicted_outcome || '-'}</strong>
+              ${penText}
               ${existingPred.confidence_pct != null ? `· Confidence: <strong>${existingPred.confidence_pct}%</strong> (${confPctToLabel(existingPred.confidence_pct)})` : ''}
               ${existingPred.points_earned != null ? `· Points: <strong style="color:#f5c518">${existingPred.points_earned}</strong>` : ''}
             </div>
@@ -438,10 +454,13 @@
         const isDisabled = matchStarted;
 
         if (hasExisting) {
+          const penText = existingPred.predicted_pen_winner
+            ? ` · Pen winner: <strong>${existingPred.predicted_pen_winner}</strong>` : '';
           predictionSection = `
             <div class="prediction-existing" style="padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
               🔒 Prediction locked: <strong>${existingPred.predicted_home_score} : ${existingPred.predicted_away_score}</strong>
               · <strong>${existingPred.predicted_outcome}</strong>
+              ${penText}
               ${existingPred.confidence_pct != null ? `· <strong>${existingPred.confidence_pct}%</strong> (${confPctToLabel(existingPred.confidence_pct)})` : ''}
             </div>
           `;
@@ -452,6 +471,18 @@
             </div>
           `;
         } else {
+          // Penalty field — only shown for knockout stages when Draw is selected
+          const penFieldHtml = isKnockout ? `
+            <div class="form-group pen-field" id="pen-field-${m.id}" style="display:none;">
+              <label>⚽ Penalty Winner</label>
+              <select id="pred-pen-${m.id}">
+                <option value="">— Select penalty winner —</option>
+                <option value="${m.team_home}">${m.team_home}</option>
+                <option value="${m.team_away}">${m.team_away}</option>
+              </select>
+            </div>
+          ` : '';
+
           predictionSection = `
             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
               <button class="predict-toggle-btn" id="toggle-btn-${m.id}" onclick="togglePredictPanel(${m.id})">
@@ -464,9 +495,9 @@
               <div class="predict-form-grid">
                 <div class="form-group">
                   <label>Outcome</label>
-                  <select id="pred-outcome-${m.id}">
+                  <select id="pred-outcome-${m.id}" onchange="togglePenaltyField(${m.id}, this.value, ${isKnockout})">
                     <option value="home">${m.team_home} Win</option>
-                    <option value="draw">Draw</option>
+                    <option value="draw">Draw${isKnockout ? ' (goes to penalties)' : ''}</option>
                     <option value="away">${m.team_away} Win</option>
                   </select>
                 </div>
@@ -487,10 +518,11 @@
                   </div>
                   <span class="conf-badge none" id="conf-badge-${m.id}">—</span>
                 </div>
+                ${penFieldHtml}
               </div>
               <div class="predict-actions">
                 <button class="predict-submit-btn" id="pred-submit-${m.id}"
-                        onclick="preparePrediction(${m.id}, '${m.team_home}', '${m.team_away}')">
+                        onclick="preparePrediction(${m.id}, '${m.team_home}', '${m.team_away}', ${isKnockout})">
                   Submit Prediction
                 </button>
                 <span class="predict-msg" id="pred-msg-${m.id}" style="display:none;"></span>
@@ -530,52 +562,68 @@
       btn.classList.toggle('open', !isOpen);
     }
 
-    // New function: Prepare data and show confirmation modal
-    function preparePrediction(matchId, teamHome, teamAway) {
+    // Show/hide penalty field based on outcome selection
+    function togglePenaltyField(matchId, value, isKnockout) {
+      if (!isKnockout) return; // Group stage — no penalties
+      const penField = document.getElementById(`pen-field-${matchId}`);
+      if (!penField) return;
+      penField.style.display = value === 'draw' ? 'block' : 'none';
+      // Reset penalty selection when hidden
+      if (value !== 'draw') {
+        const penSelect = document.getElementById(`pred-pen-${matchId}`);
+        if (penSelect) penSelect.value = '';
+      }
+    }
+
+    function preparePrediction(matchId, teamHome, teamAway, isKnockout) {
       const homeScore = document.getElementById(`pred-home-${matchId}`).value.trim();
       const awayScore = document.getElementById(`pred-away-${matchId}`).value.trim();
       const outcome = document.getElementById(`pred-outcome-${matchId}`).value;
       const confPctRaw = document.getElementById(`pred-conf-${matchId}`).value.trim();
+      const msgEl = document.getElementById(`pred-msg-${matchId}`);
 
       if (homeScore === '' || awayScore === '') {
-        const msgEl = document.getElementById(`pred-msg-${matchId}`);
         showPredMsg(msgEl, 'error', 'Please enter both scores.');
         return;
       }
 
       const confPct = confPctRaw !== '' ? parseInt(confPctRaw) : null;
       if (confPct !== null && (confPct < 0 || confPct > 100)) {
-        const msgEl = document.getElementById(`pred-msg-${matchId}`);
         showPredMsg(msgEl, 'error', 'Confidence must be between 0 and 100.');
         return;
       }
 
-      // Store pending prediction
+      // Validate penalty winner if knockout + draw selected
+      let penWinner = null;
+      if (isKnockout && outcome === 'draw') {
+        const penSelect = document.getElementById(`pred-pen-${matchId}`);
+        penWinner = penSelect ? penSelect.value : '';
+        if (!penWinner) {
+          showPredMsg(msgEl, 'error', 'Please select a penalty winner.');
+          return;
+        }
+      }
+
       pendingPrediction = {
-        matchId,
-        teamHome,
-        teamAway,
+        matchId, teamHome, teamAway,
         homeScore: parseInt(homeScore),
         awayScore: parseInt(awayScore),
-        outcome,
-        confPct
+        outcome, penWinner, confPct
       };
 
-      // Build summary
-      const outcomeText = outcome === 'home' ? `${teamHome} Win` : 
-                         outcome === 'away' ? `${teamAway} Win` : 'Draw';
+      const outcomeText = outcome === 'home' ? `${teamHome} Win`
+                        : outcome === 'away' ? `${teamAway} Win`
+                        : 'Draw';
 
       document.getElementById('confirm-summary').innerHTML = `
-        <strong>${teamHome} ${homeScore} - ${awayScore} ${teamAway}</strong><br>
+        <strong>${teamHome} ${homeScore} – ${awayScore} ${teamAway}</strong><br>
         Predicted Outcome: <strong>${outcomeText}</strong><br>
+        ${penWinner ? `Penalty Winner: <strong>${penWinner}</strong><br>` : ''}
         ${confPct !== null ? `Confidence: <strong>${confPct}%</strong> (${confPctToLabel(confPct)})` : ''}
       `;
 
       document.getElementById('confirm-overlay').style.display = 'flex';
-      
-      // Set up confirm button
-      const confirmBtn = document.getElementById('confirm-yes-btn');
-      confirmBtn.onclick = () => confirmSubmitPrediction();
+      document.getElementById('confirm-yes-btn').onclick = () => confirmSubmitPrediction();
     }
 
     function closeConfirm() {
@@ -586,7 +634,7 @@
     async function confirmSubmitPrediction() {
       if (!pendingPrediction) return;
 
-      const { matchId, homeScore, awayScore, outcome, confPct } = pendingPrediction;
+      const { matchId, homeScore, awayScore, outcome, penWinner, confPct } = pendingPrediction;
       const msgEl = document.getElementById(`pred-msg-${matchId}`);
       const btn = document.getElementById(`pred-submit-${matchId}`);
 
@@ -600,6 +648,7 @@
         predicted_home_score: homeScore,
         predicted_away_score: awayScore,
         predicted_outcome: outcome,
+        predicted_pen_winner: penWinner || null,
         confidence: confPct != null ? confPctToLabel(confPct).toLowerCase() : null,
         confidence_pct: confPct,
         source: 'web'
@@ -625,9 +674,7 @@
 
       const m = allMatches.find(x => x.id === matchId);
       const cardEl = document.getElementById(`match-card-${matchId}`);
-      if (cardEl && m) {
-        cardEl.outerHTML = buildMatchCard(m);
-      }
+      if (cardEl && m) cardEl.outerHTML = buildMatchCard(m);
 
       showPredMsg(msgEl, 'success', 'Prediction submitted successfully!');
     }
