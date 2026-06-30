@@ -594,22 +594,22 @@
       }
 
       // ✅ ADD THIS — parse scores into numbers first
-      const h = parseInt(homeScore);
-      const a = parseInt(awayScore);
+      // const h = parseInt(homeScore);
+      // const a = parseInt(awayScore);
 
-          // ✅ NEW: Validate outcome matches the score logically
-      if (h === a && outcome !== 'draw') {
-        showPredMsg(msgEl, 'error', 'Scores are equal — you must select Draw and pick a penalty winner.');
-        return;
-      }
-      if (h > a && outcome !== 'home') {
-        showPredMsg(msgEl, 'error', `Score favors ${teamHome} — outcome must be "${teamHome} Win".`);
-        return;
-      }
-      if (h < a && outcome !== 'away') {
-        showPredMsg(msgEl, 'error', `Score favors ${teamAway} — outcome must be "${teamAway} Win".`);
-        return;
-      }
+      //     // ✅ NEW: Validate outcome matches the score logically
+      // if (h === a && outcome !== 'draw') {
+      //   showPredMsg(msgEl, 'error', 'Scores are equal — you must select Draw and pick a penalty winner.');
+      //   return;
+      // }
+      // if (h > a && outcome !== 'home') {
+      //   showPredMsg(msgEl, 'error', `Score favors ${teamHome} — outcome must be "${teamHome} Win".`);
+      //   return;
+      // }
+      // if (h < a && outcome !== 'away') {
+      //   showPredMsg(msgEl, 'error', `Score favors ${teamAway} — outcome must be "${teamAway} Win".`);
+      //   return;
+      // }
 
       const confPct = confPctRaw !== '' ? parseInt(confPctRaw) : null;
       if (confPct !== null && (confPct < 0 || confPct > 100)) {
