@@ -275,9 +275,9 @@
     </div>
 
     <div class="filter-bar" id="stage-filter">
-      <button class="filter-btn active" data-stage="all">All Stages</button>
+      <button class="filter-btn" data-stage="all">All Stages</button>
       <button class="filter-btn" data-stage="group">Group Stage</button>
-      <button class="filter-btn" data-stage="round32">Round of 32</button>
+      <button class="filter-btn active" data-stage="round32">Round of 32</button>
       <button class="filter-btn" data-stage="round16">Round of 16</button>
       <button class="filter-btn" data-stage="quarter">Quarter-Finals</button>
       <button class="filter-btn" data-stage="semi">Semi-Finals</button>
@@ -316,7 +316,7 @@
   <script>
     let allMatches = [];
     let currentStatusFilter = 'upcoming';
-    let currentStageFilter = 'all';
+    let currentStageFilter = 'round32';
     let currentUser = null;
     let myPredictions = {};
     let pendingPrediction = null;
@@ -418,10 +418,15 @@
       const matchStarted = isLive || isFinished;
       const isKnockout = PENALTY_STAGES.includes(m.stage);
 
+      const isDrawResult = isFinished && m.actual_home_score != null && m.actual_away_score != null
+        && m.actual_home_score === m.actual_away_score;
+      const penWinnerHtml = isDrawResult && m.actual_pen_winner
+        ? `<div class="pen-winner-note" style="text-align:center; font-size:0.78rem; color:#f5c518; margin-top:4px;">⚽ ${m.actual_pen_winner} won on penalties</div>`
+        : '';
+
       let scoreDisplay = isFinished || isLive
         ? `<div class="score-box">${m.actual_home_score ?? '-'} : ${m.actual_away_score ?? '-'}</div>`
         : `<div class="vs-label">VS</div>`;
-
       const stageLabel = m.group_name ? `Group ${m.group_name}` : (STAGE_LABELS[m.stage] || m.stage);
       const existingPred = myPredictions[m.id];
 
@@ -549,6 +554,7 @@
             ${scoreDisplay}
             <span class="team-name">${m.team_away} ${m.team_away_flag || ''}</span>
           </div>
+          ${penWinnerHtml}
           ${predictionSection}
         </div>
       `;
