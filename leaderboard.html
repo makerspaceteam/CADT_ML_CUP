@@ -120,6 +120,28 @@
     .conf-badge.low { background: rgba(239,68,68,0.15); color: #ef4444; }
     .points-earned { font-weight: 700; color: var(--yellow); }
     .modal-loading { text-align: center; padding: 40px; color: var(--gray); }
+
+    /* Locked prediction (match not finished, viewer is neither admin nor owner) */
+    .locked-wrap {
+      position: relative;
+      display: inline-block;
+    }
+    .locked-cell {
+      filter: blur(5px);
+      -webkit-user-select: none;
+      pointer-events: none;
+      user-select: none;
+    }
+    .locked-icon {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 0.85rem;
+      filter: none;
+      opacity: 0.9;
+      text-shadow: 0 0 6px rgba(0,0,0,0.9);
+    }
   </style>
 </head>
 <body>
@@ -311,6 +333,13 @@
         return;
       }
 
+      // Who's looking? Admins and the profile's own owner can always see
+      // picks for matches that haven't finished yet. Everyone else gets a
+      // blurred cell so predictions can't be copied before kickoff.
+      const viewerIsAdmin = !!(currentProfile && currentProfile.is_admin);
+      const viewerIsOwner = !!(currentProfile && String(currentProfile.id) === String(userId));
+      const canRevealPending = viewerIsAdmin || viewerIsOwner;
+
       const total = data.length;
       const totalPoints = data.reduce((sum, p) => sum + (p.points_earned || 0), 0);
       const correct = data.filter(p => p.points_earned >= 3).length;
@@ -390,14 +419,28 @@
         return p.predicted_outcome;
       })();
 
+      // Blur the actual pick/score/confidence for matches that haven't
+      // finished, unless the viewer is an admin or this is their own history.
+      const hideDetails = isPending && !canRevealPending;
+
+      const lockWrap = (innerHtml) =>
+        `<span class="locked-wrap"><span class="locked-cell">${innerHtml}</span><span class="locked-icon">🔒</span></span>`;
+
+      const predScoreCell = hideDetails ? lockWrap(predScore) : predScore;
+
+      const confRealCell = p.confidence ? `<span class="conf-badge ${confClass}">${p.confidence}</span>` : '–';
+      const confCell = hideDetails ? lockWrap(confRealCell) : confRealCell;
+
+      const pickCell = hideDetails ? lockWrap(pickDisplay) : pickDisplay;
+
       return `
         <tr>
           <td>${matchDate}</td>
           <td>${m.team_home_flag || ''} ${m.team_home} vs ${m.team_away} ${m.team_away_flag || ''}</td>
-          <td>${predScore}</td>
+          <td>${predScoreCell}</td>
           <td>${actualScore}</td>
-          <td>${p.confidence ? `<span class="conf-badge ${confClass}">${p.confidence}</span>` : '–'}</td>
-          <td>${pickDisplay}</td>
+          <td>${confCell}</td>
+          <td>${pickCell}</td>
           <td><span class="outcome-pill ${outcomeClass}">${outcomeLabel}</span></td>
           <td class="points-earned">${isPending ? '–' : (p.points_earned || 0)}</td>
         </tr>
