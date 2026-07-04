@@ -108,14 +108,14 @@ function mapStage(event) {
     const GROUP_END    = new Date('2026-06-28').getTime();
     const R32_START    = new Date('2026-06-28').getTime();
     const R32_END      = new Date('2026-07-04').getTime();
-    const R16_START    = new Date('2026-07-05').getTime();    
-    const R16_END      = new Date('2026-07-07').getTime();
-    const QF_START     = new Date('2026-07-07').getTime();
-    const QF_END       = new Date('2026-07-11').getTime();
-    const SF_START     = new Date('2026-07-11').getTime();
-    const SF_END       = new Date('2026-07-15').getTime();
-    const THIRD_DATE   = new Date('2026-07-15').getTime();
-    const FINAL_DATE   = new Date('2026-07-16').getTime();
+    const R16_START    = new Date('2026-07-04').getTime();    
+    const R16_END      = new Date('2026-07-08').getTime();
+    const QF_START     = new Date('2026-07-08').getTime();
+    const QF_END       = new Date('2026-07-12').getTime();
+    const SF_START     = new Date('2026-07-12').getTime();
+    const SF_END       = new Date('2026-07-16').getTime();
+    const THIRD_DATE   = new Date('2026-07-18').getTime();
+    const FINAL_DATE   = new Date('2026-07-19').getTime();
 
     if (d >= GROUP_START && d < GROUP_END)  return { stage: 'group',       group: null };
     if (d >= R32_START   && d < R32_END)    return { stage: 'round32',     group: null };
