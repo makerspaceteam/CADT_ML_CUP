@@ -115,7 +115,7 @@ function mapStage(event) {
     const SF_START     = new Date('2026-07-14').getTime();
     const SF_END       = new Date('2026-07-17').getTime();
     const THIRD_DATE   = new Date('2026-07-18').getTime();
-    const FINAL_DATE   = new Date('2026-07-20').getTime();
+    const FINAL_DATE   = new Date('2026-07-19').getTime();
 
     if (d >= GROUP_START && d < GROUP_END)  return { stage: 'group',       group: null };
     if (d >= R32_START   && d < R32_END)    return { stage: 'round32',     group: null };
